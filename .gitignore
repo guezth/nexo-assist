@@ -1,0 +1,17 @@
+temp/
+node_modules/
+.env
+.next/
+next-env.d.ts
+*.tsbuildinfo
+.env.*
+!.env.example
+
+# Banco SQLite local (só o da raiz: src/data tem os dados de exemplo)
+/data/
+
+# Configuração local do Claude Code
+.claude/
+
+# Documentação de trabalho (checklist e roteiro de defesa): só local
+/docs/
