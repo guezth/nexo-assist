@@ -1,0 +1,54 @@
+import { redirect } from "next/navigation";
+import { Suspense } from "react";
+import { ChatView } from "@/components/chat/chat-view";
+import styles from "@/components/chat/chat.module.css";
+import { EmployeeShell } from "@/components/employee-shell";
+import type { AgentMessageView } from "@/domain/chat";
+import { getSession } from "@/server/auth/session";
+import { getConversations } from "@/server/conversations";
+
+function OnlineStatus() {
+  return (
+    <div className={styles.status}>
+      <span className={styles.statusDot} />
+      Assistente online
+    </div>
+  );
+}
+
+async function ChatScreen() {
+  const user = await getSession();
+  if (!user || user.role !== "employee") redirect("/login");
+
+  const conversation = await (await getConversations()).findActive(user.id);
+
+  // Shown above every conversation; it is part of the screen, not of the stored history.
+  const greeting: AgentMessageView = {
+    id: "greeting",
+    role: "agent",
+    steps: [],
+    blocks: [
+      {
+        kind: "bubble",
+        text: `Olá, ${user.name.split(" ")[0]}. Sou o Nexo Assist, do suporte de TI. Conte o que está acontecendo ou pergunte pelo status de um chamado.`,
+      },
+    ],
+  };
+
+  return (
+    <EmployeeShell user={user} active="chat" title="Atendimento" topBarRight={<OnlineStatus />}>
+      <ChatView
+        initialMessages={[greeting, ...(conversation?.messages ?? [])]} initialUsed={conversation?.used ?? 0}
+        initialWithSupport={conversation?.mode === "analyst"}
+      />
+    </EmployeeShell>
+  );
+}
+
+export default function ChatPage() {
+  return (
+    <Suspense fallback={null}>
+      <ChatScreen />
+    </Suspense>
+  );
+}
