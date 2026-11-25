@@ -92,7 +92,7 @@ export async function handleTurn(requester: Requester, input: TurnInput, deps: T
       else if (input.type !== "text") await deps.conversations.applyAction(conversation.id, input);
 
       const message = draftAction ? "Quero editar o rascunho do chamado." : text;
-      agentResult = (await (deps.runAgent ?? runAgentTurn)(ctx, message, buildHistory(conversation.messages), deps.models)) as RunAgentTurnResult | undefined;
+      agentResult = (await (deps.runAgent ?? runAgentTurn)(ctx, message, await buildHistory(conversation.messages, deps.models), deps.models)) as RunAgentTurnResult | undefined;
     }
   } catch (error) {
     console.error("[agent] turn failed", error);

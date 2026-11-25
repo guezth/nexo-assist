@@ -39,14 +39,37 @@ function historyText(message: ChatMessageView): string | null {
   return parts.join(" ");
 }
 
-export function buildHistory(messages: ChatMessageView[]): HistoryMessage[] {
+const SUMMARY_INSTRUCTIONS = `Resuma a conversa em até 4 frases, em português do Brasil, mantendo: o que foi pedido, o que já foi decidido ou feito, chamados citados (código e título) e pendências. Responda SÓ o resumo.`;
+
+/** Summarizes older messages, so long conversations keep their beginning. */
+async function summarizeDropped(dropped: HistoryMessage[], models: AgentModels): Promise<string> {
+  try {
+    const agent = new Agent({ id: "nexo-assist-light", name: "nexo-assist-light", instructions: SUMMARY_INSTRUCTIONS, model: models.fast });
+    const result = await agent.generate(dropped.map((m) => `[${m.role === "user" ? "funcionária" : "agent"}] ${m.content}`).join("\n"));
+    return result.text.trim() || "Conversa anterior sem detalhes suficientes.";
+  } catch (error) {
+    console.error("[agent] falhou o resumo da conversa antiga", error);
+    return "Conversa anterior sem resumo disponível.";
+  }
+}
+
+function asHistory(messages: ChatMessageView[]): HistoryMessage[] {
   return messages
-    .slice(-MAX_HISTORY)
     .map((message): HistoryMessage | null => {
       const content = historyText(message);
       return content ? { role: message.role === "user" ? "user" : "assistant", content } : null;
     })
     .filter((message): message is HistoryMessage => message !== null);
+}
+
+export async function buildHistory(messages: ChatMessageView[], models: AgentModels): Promise<HistoryMessage[]> {
+  const dropped = asHistory(messages.slice(0, -MAX_HISTORY));
+  const history = asHistory(messages.slice(-MAX_HISTORY));
+  if (dropped.length > 0) {
+    const summary = await summarizeDropped(dropped, models);
+    history.unshift({ role: "user", content: `Resumo da conversa anterior: ${summary}` });
+  }
+  return history;
 }
 
 const SOCIAL_AND_SCOPE_INSTRUCTIONS = `Você é o Nexo Assist, assistente do service desk de TI da Nexo. Responda em português do Brasil, em até 2 frases, sem markdown nem emojis.
