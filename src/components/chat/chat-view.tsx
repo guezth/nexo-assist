@@ -2,8 +2,9 @@
 
 import { ArrowUp, Loader2 } from "lucide-react";
 import { Fragment, useEffect, useRef, useState } from "react";
-import { pollConversation, startNewConversation } from "@/app/chat/actions";
+import { pollConversation, rateAnswerAction, startNewConversation } from "@/app/chat/actions";
 import { MAX_SESSION_MESSAGES, type AgentMessageView, type ChatAction, type ChatMessageView, type TurnEvent, type TurnInput } from "@/domain/chat";
+import type { FeedbackRating } from "@/domain/feedback";
 import { applyAction, pendingDraftId } from "@/domain/chat-state";
 import { TurnAssembler } from "@/domain/turn-assembler";
 import styles from "./chat.module.css";
@@ -153,6 +154,16 @@ export function ChatView({
 
   const onAction = (action: ChatAction) => submit(action, action.label, action);
 
+  /** Records the employee's rating of an answer. */
+  async function rate(messageId: string, rating: FeedbackRating): Promise<void> {
+    try {
+      await rateAnswerAction(Number(messageId.slice(1)), rating);
+      setMessages((current) => current.map((m) => (m.role === "agent" && m.id === messageId ? { ...m, feedback: { rating } } : m)));
+    } catch {
+      // Nothing breaks if it fails: the buttons simply stay.
+    }
+  }
+
   function onSubmit(event: React.FormEvent) {
     event.preventDefault();
     const value = text.trim();
@@ -189,7 +200,7 @@ export function ChatView({
               case "system":
                 return <SystemLine message={message} />;
               case "agent":
-                return <AgentMessage message={message} disabled={busy} onAction={onAction} onInspect={(m) => setInspectedId(m.id)} />;
+                return <AgentMessage message={message} disabled={busy} onAction={onAction} onInspect={(m) => setInspectedId(m.id)} onRate={(messageId, rating) => void rate(messageId, rating)} />;
             }
           })();
           return initialIds.has(message.id) ? (

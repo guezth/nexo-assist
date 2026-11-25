@@ -1,4 +1,5 @@
 import type { Client } from "@libsql/client";
+import type { FeedbackRating } from "@/domain/feedback";
 import type { TurnMetric } from "@/domain/metrics";
 import {
   MAX_SESSION_MESSAGES,
@@ -282,6 +283,29 @@ export class ConversationRepository {
 
   // ---------- Turn metrics ----------
 
+  /** Rates an agent answer ("good" / "needs_improvement"). False when the message is not an agent answer of this conversation. */
+  async rateMessage(conversationId: number, messageId: number, rating: FeedbackRating): Promise<boolean> {
+    const message = await this.db.execute({
+      sql: "SELECT role, conversation_id FROM messages WHERE id = ?",
+      args: [messageId],
+    });
+    const row = message.rows[0];
+    if (!row || row.conversation_id !== conversationId || row.role !== "agent") return false;
+    await this.db.execute({
+      sql: "INSERT INTO turn_feedback (conversation_id, message_id, rating, created_at) VALUES (?, ?, ?, ?) ON CONFLICT(conversation_id, message_id) DO UPDATE SET rating = excluded.rating, created_at = excluded.created_at",
+      args: [conversationId, messageId, rating, this.now().toISOString()],
+    });
+    return true;
+  }
+
+  /** Ratings of the conversation's agent answers, keyed by message id. */
+  private async feedbackByConversation(conversationId: number): Promise<Map<number, FeedbackRating>> {
+    const result = await this.db.execute({ sql: "SELECT message_id, rating FROM turn_feedback WHERE conversation_id = ?", args: [conversationId] });
+    const map = new Map<number, FeedbackRating>();
+    for (const row of result.rows) map.set(Number(row.message_id), row.rating as FeedbackRating);
+    return map;
+  }
+
   /** Stores the metrics of one turn of the agent. */
   async recordMetric(metric: TurnMetric): Promise<void> {
     await this.db.execute({
@@ -419,7 +443,11 @@ export class ConversationRepository {
       sql: "SELECT id, role, payload, created_at FROM messages WHERE conversation_id = ? ORDER BY id",
       args: [info.id],
     });
-    return { ...info, messages: messages.rows.map(messageFromRow) };
+    const feedback = await this.feedbackByConversation(info.id);
+    return {
+      ...info,
+      messages: messages.rows.map(messageFromRow).map((m) => (m.role === "agent" && feedback.get(Number(m.id.slice(1))) ? { ...m, feedback: { rating: feedback.get(Number(m.id.slice(1)))! } } : m)),
+    };
   }
 
   private async touch(conversationId: number, at: string): Promise<void> {

@@ -3,6 +3,7 @@
  * agent (server side) produces them, the UI only draws them.
  */
 
+import type { FeedbackRating } from "./feedback";
 import type { TurnMetric } from "./metrics";
 import type { AffectedScope, Priority, TicketCategory, TicketType } from "./types";
 
@@ -107,6 +108,8 @@ export interface AgentMessageView {
   decision?: DecisionView;
   /** Metrics of the turn that produced this answer (latency, model, tokens). */
   metrics?: TurnMetric;
+  /** Rating the employee gave this answer ("good" / "needs_improvement"), if any. */
+  feedback?: { rating: FeedbackRating };
   at?: string;
 }
 

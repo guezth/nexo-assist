@@ -14,6 +14,7 @@ import type {
   Tone,
   UserMessageView,
 } from "@/domain/chat";
+import type { FeedbackRating } from "@/domain/feedback";
 import { formatClock } from "@/lib/format";
 import styles from "./chat.module.css";
 
@@ -231,12 +232,15 @@ export function AgentMessage({
   onAction,
   thinking = false,
   onInspect,
+  onRate,
 }: {
   message: AgentMessageView;
   disabled: boolean;
   onAction: OnAction;
   /** Opens the transparency panel for this answer. */
   onInspect?: (message: AgentMessageView) => void;
+  /** Rates the answer ("good" / "needs_improvement"). */
+  onRate?: (messageId: string, rating: FeedbackRating) => void;
   /** The agent is still working on this message. */
   thinking?: boolean;
 }) {
@@ -266,6 +270,16 @@ export function AgentMessage({
       {message.blocks.map((block, index) => (
         <Block key={index} block={block} disabled={disabled} onAction={onAction} />
       ))}
+      {onRate && !message.feedback && (
+        <div className={styles.feedbackRow}>
+          <button type="button" className={styles.btnSecondary} disabled={disabled} onClick={() => onRate(message.id, "good")}>
+            Ótimo
+          </button>
+          <button type="button" className={styles.btn} disabled={disabled} onClick={() => onRate(message.id, "needs_improvement")}>
+            Precisa melhorar
+          </button>
+        </div>
+      )}
     </div>
   );
 }

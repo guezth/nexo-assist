@@ -290,6 +290,13 @@
   border-top: 1px solid var(--rule);
 }
 
+.feedbackRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+}
+
 .btn {
   height: 36px;
   display: inline-flex;

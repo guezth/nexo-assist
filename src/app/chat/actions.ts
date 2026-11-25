@@ -1,6 +1,7 @@
 "use server";
 
 import type { ChatMessageView } from "@/domain/chat";
+import type { FeedbackRating } from "@/domain/feedback";
 import { getSession } from "@/server/auth/session";
 import { getConversations } from "@/server/conversations";
 
@@ -19,6 +20,15 @@ export async function pollConversation(): Promise<ConversationPoll> {
 }
 
 /** Closes the active conversation so the employee can start a new session. */
+/** Rates an agent answer ("good" / "needs_improvement"). Only for the employee's own conversation. */
+export async function rateAnswerAction(messageId: number, rating: FeedbackRating): Promise<{ ok: true; rated: boolean }> {
+  const user = await getSession();
+  if (!user || user.role !== "employee") throw new Error("Sessão inválida.");
+  const conversation = await (await getConversations()).findActive(user.id);
+  if (!conversation) return { ok: true, rated: false };
+  return { ok: true, rated: await (await getConversations()).rateMessage(conversation.id, messageId, rating) };
+}
+
 export async function startNewConversation(): Promise<ConversationPoll> {
   const user = await getSession();
   if (!user || user.role !== "employee") throw new Error("Sessão inválida.");

@@ -79,6 +79,17 @@ const MIGRATIONS: string[][] = [
      )`,
     `CREATE INDEX turn_metrics_by_conversation ON turn_metrics (conversation_id)`,
   ],
+  [
+    // Feedback dos funcionários sobre as respostas do agent (botões "ótimo"/"precisa melhorar").
+    `CREATE TABLE turn_feedback (
+       id INTEGER PRIMARY KEY AUTOINCREMENT,
+       conversation_id INTEGER NOT NULL REFERENCES conversations (id),
+       message_id INTEGER NOT NULL,
+       rating TEXT NOT NULL CHECK (rating IN ('good', 'needs_improvement')),
+       created_at TEXT NOT NULL
+     )`,
+    `CREATE UNIQUE INDEX turn_feedback_by_message ON turn_feedback (conversation_id, message_id)`,
+  ],
 ];
 
 export async function migrate(client: Client): Promise<void> {
