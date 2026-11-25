@@ -42,8 +42,6 @@ const FILTERS: Array<{ id: Filter; label: string }> = [
   { id: "mine", label: "Minhas" },
 ];
 
-const REFRESH_MS = 5000;
-
 const toneClass = (tone: Tone | "muted") => styles[`tone-${tone}`];
 
 function Avatar({ avatar, size, online, ringOnDesk }: { avatar: AvatarView; size: 46 | 40; online?: boolean; ringOnDesk?: boolean }) {
@@ -81,14 +79,22 @@ export function ConsoleView({
   const [panelOpen, setPanelOpen] = useState(true);
   const [notice, setNotice] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const [liveRows, setLiveRows] = useState<ConversationRowView[] | null>(null);
+  const list = liveRows ?? rows;
 
-  // New messages come from the employees: look again every few seconds.
+  // New messages come from the employees: an SSE subscription to the console events.
   useEffect(() => {
-    const timer = setInterval(() => {
-      if (!document.hidden && !pending) router.refresh();
-    }, REFRESH_MS);
-    return () => clearInterval(timer);
-  }, [router, pending]);
+    const source = new EventSource("/console/events");
+    source.onmessage = (event) => {
+      try {
+        const updated = JSON.parse(event.data) as ConversationRowView[];
+        if (Array.isArray(updated)) setLiveRows(updated);
+      } catch {
+        // Keep the last list; try again on the next event.
+      }
+    };
+    return () => source.close();
+  }, []);
 
   // Tells the server this analyst is here (the login screen shows how many are online).
   useEffect(() => {
@@ -97,7 +103,7 @@ export function ConsoleView({
     return () => clearInterval(timer);
   }, []);
 
-  const waiting = rows.reduce((sum, row) => sum + (row.group === "queue" || row.group === "mine" ? row.unread : 0), 0);
+  const waiting = list.reduce((sum, row) => sum + (row.group === "queue" || row.group === "mine" ? row.unread : 0), 0);
 
   // New messages show in the tab title too, for when the console is in the background.
   useEffect(() => {
@@ -105,13 +111,13 @@ export function ConsoleView({
   }, [waiting]);
 
   const counts = {
-    all: rows.length,
-    queue: rows.filter((r) => r.group === "queue").length,
-    agent: rows.filter((r) => r.group === "agent").length,
-    mine: rows.filter((r) => r.group === "mine").length,
+    all: list.length,
+    queue: list.filter((r) => r.group === "queue").length,
+    agent: list.filter((r) => r.group === "agent").length,
+    mine: list.filter((r) => r.group === "mine").length,
   };
   const needle = query.trim().toLowerCase();
-  const visible = rows.filter((row) => (filter === "all" || row.group === filter) && (!needle || row.searchText.includes(needle)));
+  const visible = list.filter((row) => (filter === "all" || row.group === filter) && (!needle || row.searchText.includes(needle)));
 
   function perform(action: () => Promise<ConsoleActionResult>) {
     setNotice(null);
