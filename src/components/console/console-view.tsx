@@ -23,6 +23,7 @@ import {
   heartbeatAction,
   returnToAgentAction,
   sendAnalystMessageAction,
+  setTypingAction,
   takeOverAction,
   type ConsoleActionResult,
 } from "@/app/console/actions";
@@ -351,6 +352,8 @@ function ConversationPane({
   const inspected = detail.messages.find((m) => m.id === inspectedId && m.kind === "agent") ?? null;
   const mine = detail.group === "mine";
   const canTakeOver = detail.group === "queue" || detail.group === "agent";
+  const [typingFocus, setTypingFocus] = useState(false);
+  const typingOn = typingFocus || detail.typing;
 
   useEffect(() => {
     const el = listRef.current;
@@ -362,7 +365,20 @@ function ConversationPane({
     const value = text.trim();
     if (!value || pending) return;
     setText("");
-    perform(() => sendAnalystMessageAction(detail.id, value));
+    perform(async () => {
+      await setTypingAction(detail.id, false);
+      return sendAnalystMessageAction(detail.id, value);
+    });
+  }
+
+  function beginTyping() {
+    setTypingFocus(true);
+    perform(() => setTypingAction(detail.id, true));
+  }
+
+  function endTyping() {
+    setTypingFocus(false);
+    perform(() => setTypingAction(detail.id, false));
   }
 
   return (
@@ -377,6 +393,11 @@ function ConversationPane({
           <div className={`${styles.badge} ${styles[`badge-${detail.badge.tone}`]}`}>
             <Bot size={14} aria-hidden />
             {detail.badge.label}
+          </div>
+        )}
+        {typingOn && (
+          <div className={styles.typingLine} role="status" aria-live="polite">
+            {detail.name.split(" ")[0]} está digitando…
           </div>
         )}
         {mine && (
@@ -465,6 +486,8 @@ function ConversationPane({
               aria-label="Mensagem para a pessoa"
               maxLength={2000}
               autoComplete="off"
+              onFocus={beginTyping}
+              onBlur={endTyping}
             />
             <button type="submit" className={styles.send} disabled={pending || text.trim() === ""} aria-label="Enviar">
               <SendHorizontal size={18} aria-hidden />

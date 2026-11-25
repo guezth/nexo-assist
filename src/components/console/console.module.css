@@ -479,6 +479,16 @@
   color: var(--ink-3);
 }
 
+.typingLine {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 6px 0;
+  font-size: 12px;
+  font-style: italic;
+  color: var(--ink-3);
+}
+
 .badge {
   flex: none;
   display: flex;

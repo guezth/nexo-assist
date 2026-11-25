@@ -297,6 +297,14 @@
   margin-top: 6px;
 }
 
+.typingLine {
+  align-self: flex-start;
+  margin: 4px 2px 0;
+  font-size: 12px;
+  font-style: italic;
+  color: var(--ink-3);
+}
+
 .btn {
   height: 36px;
   display: inline-flex;

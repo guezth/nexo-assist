@@ -121,6 +121,7 @@ export async function buildDetail(
     avatar: toAvatar(employee),
     meta: [isOnline(conversation, now) ? "online" : "offline", employee.department, group === "mine" ? null : conversation.ticketCode].filter(Boolean).join(" · "),
     group,
+    typing: conversation.typing,
     summary: conversation.handoff?.summary ?? null,
     messages: toMessages(conversation.messages),
     panel,

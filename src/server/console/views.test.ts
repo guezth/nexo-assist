@@ -15,6 +15,7 @@ const info = (over: Partial<ConversationInfo> = {}): ConversationInfo => ({
   handoff: null,
   ticketCode: null,
   closedBy: null,
+  typing: false,
   updatedAt: NOW.toISOString(),
   ...over,
 });

@@ -42,6 +42,8 @@ export interface ConversationInfo {
   /** Ticket the conversation is about. */
   ticketCode: string | null;
   closedBy: "agent" | "analyst" | null;
+  /** True while the analyst has the conversation open and is typing. */
+  typing: boolean;
   updatedAt: string;
 }
 
@@ -115,6 +117,7 @@ function infoFromRow(row: Record<string, unknown>): ConversationInfo {
     mode: row.mode as ConversationMode,
     used: Number(row.user_message_count),
     analystId: row.analyst_id === null ? null : Number(row.analyst_id),
+    typing: Number(row.typing) === 1,
     handoff: reason
       ? {
           reason,
@@ -394,11 +397,16 @@ export class ConversationRepository {
   async addAnalystMessage(conversationId: number, analyst: Analyst, text: string): Promise<AnalystMessageView> {
     const at = this.now().toISOString();
     const result = await this.db.execute({
-      sql: "UPDATE conversations SET updated_at = ? WHERE id = ? AND mode = 'analyst' AND analyst_id = ?",
+      sql: "UPDATE conversations SET updated_at = ?, typing = 0 WHERE id = ? AND mode = 'analyst' AND analyst_id = ?",
       args: [at, conversationId, analyst.id],
     });
     if (result.rowsAffected === 0) throw new ConversationStateError("not_yours");
     return (await this.insert(conversationId, { role: "analyst", author: analyst.name, team: `Suporte ${analyst.level}`, text }, at)) as AnalystMessageView;
+  }
+
+  /** Sets the "typing" flag on the conversation (analyst side). */
+  async setTyping(conversationId: number, typing: boolean): Promise<void> {
+    await this.db.execute({ sql: "UPDATE conversations SET typing = ? WHERE id = ?", args: [typing ? 1 : 0, conversationId] });
   }
 
   /** Gives the conversation back to the agent. Allowed to whoever holds it, or from the queue. */

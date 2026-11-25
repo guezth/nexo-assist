@@ -90,6 +90,10 @@ const MIGRATIONS: string[][] = [
      )`,
     `CREATE UNIQUE INDEX turn_feedback_by_message ON turn_feedback (conversation_id, message_id)`,
   ],
+  [
+    // Indicador de "digitando": flag da conversa atualizada quando o analista digita/envia.
+    `ALTER TABLE conversations ADD COLUMN typing INTEGER NOT NULL DEFAULT 0`,
+  ],
 ];
 
 export async function migrate(client: Client): Promise<void> {

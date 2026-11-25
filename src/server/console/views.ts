@@ -98,6 +98,7 @@ export function toRow(
     name: employee.name,
     avatar: toAvatar(employee),
     online: isOnline(summary, now),
+    typing: summary.typing,
     time: formatListTime(last?.at ?? summary.updatedAt, now),
     urgent: unread > 0 && (group === "queue" || group === "mine"),
     preview: { text, prefix: last?.role === "agent" ? "Nexo: " : last?.role === "analyst" ? (group === "mine" ? "Você: " : `${firstName(last.author)}: `) : null },

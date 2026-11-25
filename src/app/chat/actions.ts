@@ -6,7 +6,7 @@ import { getSession } from "@/server/auth/session";
 import { getConversations } from "@/server/conversations";
 
 export type ConversationPoll =
-  | { status: "open"; mode: "agent" | "analyst"; used: number; messages: ChatMessageView[] }
+  | { status: "open"; mode: "agent" | "analyst"; used: number; typing: boolean; messages: ChatMessageView[] }
   | { status: "closed" };
 
 /** What the employee's screen asks for while it waits on the support team: new messages, or that the conversation ended. */
@@ -16,7 +16,7 @@ export async function pollConversation(): Promise<ConversationPoll> {
 
   const conversation = await (await getConversations()).findActive(user.id);
   if (!conversation) return { status: "closed" };
-  return { status: "open", mode: conversation.mode === "analyst" ? "analyst" : "agent", used: conversation.used, messages: conversation.messages };
+  return { status: "open", mode: conversation.mode === "analyst" ? "analyst" : "agent", used: conversation.used, typing: conversation.typing, messages: conversation.messages };
 }
 
 /** Closes the active conversation so the employee can start a new session. */

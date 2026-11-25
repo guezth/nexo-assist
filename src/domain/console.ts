@@ -20,6 +20,8 @@ export interface ConversationRowView {
   name: string;
   avatar: AvatarView;
   online: boolean;
+  /** The analyst has the conversation open and is typing. */
+  typing: boolean;
   /** "10:05", "ontem" */
   time: string;
   /** Needs attention: shown in the accent color. */
@@ -73,6 +75,8 @@ export interface ConversationDetailView {
   avatar: AvatarView;
   meta: string;
   group: ConversationGroup;
+  /** The analyst is typing in this conversation. */
+  typing: boolean;
   /** "Aguardando atendente", "Agent atendendo", ... */
   badge?: { label: string; tone: "warning" | "success" | "neutral" };
   /** Row above the composer. */

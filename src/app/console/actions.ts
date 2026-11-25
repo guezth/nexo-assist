@@ -109,8 +109,17 @@ export async function sendAnalystMessageAction(conversationId: number, text: str
   const clean = text.trim().slice(0, MAX_TEXT_LENGTH);
   if (!clean) return { ok: false, error: "Escreva uma mensagem." };
   return run(async () => {
-    await (await getConversations()).addAnalystMessage(conversationId, analyst, clean);
+    const conversations = await getConversations();
+    await conversations.setTyping(conversationId, false);
+    await conversations.addAnalystMessage(conversationId, analyst, clean);
   });
+}
+
+/** Marks the conversation as "analyst typing" while they write. */
+export async function setTypingAction(conversationId: number, typing: boolean): Promise<ConsoleActionResult> {
+  await requireAnalyst();
+  await (await getConversations()).setTyping(conversationId, typing);
+  return { ok: true };
 }
 
 /** The console is open: the analyst counts as online. */

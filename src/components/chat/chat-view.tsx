@@ -28,6 +28,7 @@ export function ChatView({
   const [error, setError] = useState<string | null>(null);
   const [withSupport, setWithSupport] = useState(initialWithSupport);
   const [pending, setPending] = useState(false);
+  const [typing, setTyping] = useState(false);
   /** The agent's answer while it is still being written. */
   const [live, setLive] = useState<AgentMessageView | null>(null);
   /** The answer whose decision is open in the side panel. */
@@ -131,6 +132,7 @@ export function ChatView({
         const poll = await pollConversation();
         if (poll.status === "closed") {
           setWithSupport(false);
+          setTyping(false);
           setUsed(0);
           setMessages((current) => [
             ...current,
@@ -138,6 +140,7 @@ export function ChatView({
           ]);
         } else {
           setWithSupport(poll.mode === "analyst");
+          setTyping(poll.typing);
           // Keep the greeting, which is not part of the stored conversation.
           setMessages((current) => [...current.filter((m) => m.id === "greeting"), ...poll.messages]);
         }
@@ -226,6 +229,11 @@ export function ChatView({
         {error && (
           <div className={styles.agentBubble} role="alert" style={{ borderColor: "#ee343b55" }}>
             <p>{error}</p>
+          </div>
+        )}
+        {typing && (
+          <div className={styles.typingLine} role="status" aria-live="polite">
+            Analista está digitando…
           </div>
         )}
       </div>
