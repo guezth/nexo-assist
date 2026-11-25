@@ -62,6 +62,23 @@ const MIGRATIONS: string[][] = [
        seen_at TEXT NOT NULL
      )`,
   ],
+  [
+    // Métricas de cada turno do agent (latência, modelo usado, tokens, transferência).
+    `CREATE TABLE turn_metrics (
+       id INTEGER PRIMARY KEY AUTOINCREMENT,
+       conversation_id INTEGER NOT NULL REFERENCES conversations (id),
+       route_intent TEXT,
+       model TEXT,
+       model_id TEXT,
+       duration_ms INTEGER,
+       steps INTEGER,
+       input_tokens INTEGER,
+       output_tokens INTEGER,
+       transferred INTEGER NOT NULL DEFAULT 0,
+       created_at TEXT NOT NULL
+     )`,
+    `CREATE INDEX turn_metrics_by_conversation ON turn_metrics (conversation_id)`,
+  ],
 ];
 
 export async function migrate(client: Client): Promise<void> {

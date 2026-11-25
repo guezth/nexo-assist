@@ -1,5 +1,6 @@
 import type { ChatMessageView, DraftBlock, TurnEvent, TurnInput } from "@/domain/chat";
 import { handoffRespondBy } from "@/domain/handoff";
+import type { TurnMetric } from "@/domain/metrics";
 import { TurnAssembler } from "@/domain/turn-assembler";
 import type { ConversationRepository } from "@/server/conversations/repository";
 import { MessageLimitError } from "@/server/conversations/repository";
@@ -9,6 +10,8 @@ import type { Requester, TurnContext } from "./context";
 import { decideDraft } from "./drafts";
 import type { AgentModels } from "./models";
 import { buildHistory, runAgentTurn } from "./run-turn";
+import type { RunAgentTurnResult } from "./run-turn";
+import type { HistoryMessage } from "./types";
 
 export type { TurnInput };
 
@@ -19,7 +22,7 @@ export interface TurnDeps {
   models: AgentModels;
   now?: () => Date;
   /** Replaceable in tests, so the rules around the model can be checked without one. */
-  runAgent?: typeof runAgentTurn;
+  runAgent?: (ctx: TurnContext, text: string, history: HistoryMessage[], models: AgentModels) => Promise<RunAgentTurnResult | void>;
   /** Waits between retries of the ticket system. Replaceable in tests. */
   sleep?: (ms: number) => Promise<void>;
 }
@@ -74,6 +77,7 @@ export async function handleTurn(requester: Requester, input: TurnInput, deps: T
     sleep: deps.sleep,
   };
 
+  let agentResult: RunAgentTurnResult | undefined;
   try {
     const draftAction = input.type === "draft" ? input : null;
     const pendingDraft = draftAction ? findPendingDraft(conversation.messages, draftAction.draftId) : null;
@@ -88,7 +92,7 @@ export async function handleTurn(requester: Requester, input: TurnInput, deps: T
       else if (input.type !== "text") await deps.conversations.applyAction(conversation.id, input);
 
       const message = draftAction ? "Quero editar o rascunho do chamado." : text;
-      await (deps.runAgent ?? runAgentTurn)(ctx, message, buildHistory(conversation.messages), deps.models);
+      agentResult = (await (deps.runAgent ?? runAgentTurn)(ctx, message, buildHistory(conversation.messages), deps.models)) as RunAgentTurnResult | undefined;
     }
   } catch (error) {
     console.error("[agent] turn failed", error);
@@ -96,10 +100,13 @@ export async function handleTurn(requester: Requester, input: TurnInput, deps: T
   }
 
   const built = turn.build();
-  const stored = built.blocks.length > 0 || built.steps.length > 0 ? await deps.conversations.addAgentMessage(conversation.id, built) : null;
-
   // The transfer comes after the answer, so the timeline reads: answer, then "Transferida".
   const handoff = ctx.state.handoff;
+  const metric: TurnMetric | null = agentResult ? { conversationId: conversation.id, ...agentResult, transferred: handoff !== null } : null;
+  if (metric) built.metrics = metric;
+  const stored = built.blocks.length > 0 || built.steps.length > 0 ? await deps.conversations.addAgentMessage(conversation.id, built) : null;
+  if (metric) await deps.conversations.recordMetric(metric);
+
   if (handoff) {
     await deps.conversations.cancelPendingDrafts(conversation.id);
     await deps.conversations.handOff(conversation.id, {

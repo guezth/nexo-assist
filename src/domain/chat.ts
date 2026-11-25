@@ -3,6 +3,7 @@
  * agent (server side) produces them, the UI only draws them.
  */
 
+import type { TurnMetric } from "./metrics";
 import type { AffectedScope, Priority, TicketCategory, TicketType } from "./types";
 
 export type Tone = "warning" | "primary" | "success" | "danger" | "violet" | "neutral";
@@ -104,6 +105,8 @@ export interface AgentMessageView {
   steps: StepView[];
   blocks: AgentBlock[];
   decision?: DecisionView;
+  /** Metrics of the turn that produced this answer (latency, model, tokens). */
+  metrics?: TurnMetric;
   at?: string;
 }
 

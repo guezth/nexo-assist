@@ -2,7 +2,7 @@ import { Agent } from "@mastra/core/agent";
 import type { ChatMessageView } from "@/domain/chat";
 import { messageText } from "@/domain/chat-text";
 import type { TurnContext } from "./context";
-import type { AgentModels } from "./models";
+import { estimateCostUsd, type AgentModels } from "./models";
 import { buildInstructions } from "./prompt";
 import { routeMessage } from "./router";
 import { createTools } from "./tools";
@@ -53,11 +53,30 @@ const SOCIAL_AND_SCOPE_INSTRUCTIONS = `Você é o Nexo Assist, assistente do ser
 - Se for assunto fora de TI (RH, financeiro, facilities...), diga com educação que você cuida só de TI e que a pessoa deve procurar a área responsável. Não invente contatos.
 - Se for cumprimento, agradecimento ou despedida, responda de forma simpática e lembre que pode ajudar com TI.`;
 
+/** What one turn of the agent produced, for metrics and the transparency panel. */
+export interface RunAgentTurnResult {
+  model?: "main" | "fast";
+  modelId?: string;
+  routeIntent?: "it" | "out_of_scope" | "social";
+  durationMs?: number;
+  steps?: number;
+  inputTokens?: number;
+  outputTokens?: number;
+  costUsd?: number;
+}
+
+/** Tokens reported by the stream result, when the model provides them (defensive). */
+function usageOf(result: unknown): { inputTokens?: number; outputTokens?: number } {
+  const usage = (result as { usage?: { inputTokens?: number; outputTokens?: number; promptTokens?: number; completionTokens?: number } }).usage;
+  if (!usage) return {};
+  return { inputTokens: usage.inputTokens ?? usage.promptTokens, outputTokens: usage.outputTokens ?? usage.completionTokens };
+}
+
 /**
  * One turn of the agent. Text and tool results are sent through ctx.emit as they
  * happen. Throws if the model is unreachable; the caller turns that into an error.
  */
-export async function runAgentTurn(ctx: TurnContext, text: string, history: HistoryMessage[], models: AgentModels): Promise<void> {
+export async function runAgentTurn(ctx: TurnContext, text: string, history: HistoryMessage[], models: AgentModels): Promise<RunAgentTurnResult> {
   const lastAgent = [...history].reverse().find((m) => m.role === "assistant")?.content ?? null;
   ctx.emit({ type: "step", step: { label: "analisando o pedido" } });
   const started = Date.now();
@@ -77,12 +96,14 @@ export async function runAgentTurn(ctx: TurnContext, text: string, history: Hist
     const agent = new Agent({ id: "nexo-assist-light", name: "nexo-assist-light", instructions: SOCIAL_AND_SCOPE_INSTRUCTIONS, model: models.fast });
     const result = await agent.stream(toModelMessages(history, text), { abortSignal: AbortSignal.timeout(LLM_TIMEOUT_MS) });
     await pump(ctx, result.fullStream);
-    return;
+    return { model: "fast", modelId: models.fast.modelId, routeIntent: route.intent, durationMs: Date.now() - started, ...usageOf(result) };
   }
 
   ctx.emit({ type: "step", step: { label: "entendeu que é assunto de TI", detail: `modelo leve: confiança ${route.confidence}` } });
   const mainStarted = Date.now();
   let used: "main" | "fast" = "main";
+  let modelId: string | undefined;
+  let tokens: { inputTokens?: number; outputTokens?: number } = {};
   // Fallback: the fast model takes over when the main one fails; if it fails
   // too, nothing comes out and the turn ends by handing the conversation to an analyst.
   for (const candidate of [models.main, models.fast]) {
@@ -103,6 +124,8 @@ export async function runAgentTurn(ctx: TurnContext, text: string, history: Hist
       });
       await pump(ctx, result.fullStream);
       used = isMain ? "main" : "fast";
+      modelId = candidate.modelId;
+      tokens = usageOf(result);
       break;
     } catch (error) {
       console.error(`[agent] modelo ${candidate.modelId} falhou`, error);
@@ -119,6 +142,16 @@ export async function runAgentTurn(ctx: TurnContext, text: string, history: Hist
     ctx.state.handoff = { reason: "unavailable", summary: text };
     ctx.emit({ type: "text", delta: "Não consegui montar uma resposta agora e estou transferindo você para um analista." });
   }
+
+  return {
+    model: used,
+    modelId,
+    routeIntent: "it",
+    durationMs: Date.now() - started,
+    steps: ctx.turn.stepsCount(),
+    ...tokens,
+    costUsd: estimateCostUsd(used, tokens.inputTokens, tokens.outputTokens),
+  };
 }
 
 type StreamChunk = { type: string; payload?: { text?: string; error?: unknown } };

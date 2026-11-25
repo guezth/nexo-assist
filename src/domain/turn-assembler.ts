@@ -63,6 +63,11 @@ export class TurnAssembler {
     return this.blocks.length > 0 || this.text.trim() !== "";
   }
 
+  /** Steps recorded in this message so far. */
+  stepsCount(): number {
+    return this.steps.length;
+  }
+
   /** The message as it stands, without closing the text that is still being written. */
   snapshot(id: string): AgentMessageView {
     return { id, ...this.parts(this.text) };

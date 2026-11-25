@@ -1,4 +1,5 @@
 import type { Client } from "@libsql/client";
+import type { TurnMetric } from "@/domain/metrics";
 import {
   MAX_SESSION_MESSAGES,
   type AgentMessageView,
@@ -277,6 +278,47 @@ export class ConversationRepository {
       sql: "UPDATE conversations SET mode = 'closed', closed_by = 'agent', updated_at = ? WHERE id = ? AND mode != 'closed'",
       args: [this.now().toISOString(), conversationId],
     });
+  }
+
+  // ---------- Turn metrics ----------
+
+  /** Stores the metrics of one turn of the agent. */
+  async recordMetric(metric: TurnMetric): Promise<void> {
+    await this.db.execute({
+      sql: `INSERT INTO turn_metrics (conversation_id, route_intent, model, model_id, duration_ms, steps, input_tokens, output_tokens, transferred, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: [
+        metric.conversationId,
+        metric.routeIntent ?? null,
+        metric.model ?? null,
+        metric.modelId ?? null,
+        metric.durationMs ?? null,
+        metric.steps ?? null,
+        metric.inputTokens ?? null,
+        metric.outputTokens ?? null,
+        metric.transferred ? 1 : 0,
+        this.now().toISOString(),
+      ],
+    });
+  }
+
+  /** The turn metrics of a conversation, oldest first. */
+  async metricsByConversation(conversationId: number): Promise<TurnMetric[]> {
+    const result = await this.db.execute({
+      sql: "SELECT * FROM turn_metrics WHERE conversation_id = ? ORDER BY id",
+      args: [conversationId],
+    });
+    return result.rows.map((row) => ({
+      conversationId: Number(row.conversation_id),
+      routeIntent: (row.route_intent as TurnMetric["routeIntent"]) ?? undefined,
+      model: (row.model as TurnMetric["model"]) ?? undefined,
+      modelId: row.model_id === null ? undefined : String(row.model_id),
+      durationMs: row.duration_ms === null ? undefined : Number(row.duration_ms),
+      steps: row.steps === null ? undefined : Number(row.steps),
+      inputTokens: row.input_tokens === null ? undefined : Number(row.input_tokens),
+      outputTokens: row.output_tokens === null ? undefined : Number(row.output_tokens),
+      transferred: Number(row.transferred) === 1,
+    }));
   }
 
   // ---------- Analyst side (console) ----------

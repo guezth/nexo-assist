@@ -86,6 +86,22 @@ export function TransparencyPanel({ message, onClose }: { message: AgentMessageV
           <p className={styles.inspectorNote}>Esta resposta não tem o registro da decisão, só os passos abaixo.</p>
         )}
 
+        {message.metrics && (
+          <section className={styles.inspectorGroup}>
+            <h3>Métricas do turno</h3>
+            <p className={styles.inspectorNote}>
+              {message.metrics.durationMs !== undefined && `Latência: ${message.metrics.durationMs} ms. `}
+              {message.metrics.model && message.metrics.modelId && (
+                <>
+                  Modelo: {message.metrics.model === "main" ? "principal" : "leve"} <span className={styles.modelId}>{message.metrics.modelId}</span> ·{" "}
+                </>
+              )}
+              {message.metrics.steps !== undefined && `${message.metrics.steps} passos. `}
+              {message.metrics.costUsd !== undefined && `Custo estimado: ${message.metrics.costUsd.toFixed(6)} USD.`}
+            </p>
+          </section>
+        )}
+
         <section className={styles.inspectorGroup}>
           <h3>O que consultei e fiz</h3>
           {steps.length === 0 ? (
