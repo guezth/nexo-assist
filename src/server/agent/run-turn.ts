@@ -82,25 +82,42 @@ export async function runAgentTurn(ctx: TurnContext, text: string, history: Hist
 
   ctx.emit({ type: "step", step: { label: "entendeu que é assunto de TI", detail: `modelo leve: confiança ${route.confidence}` } });
   const mainStarted = Date.now();
-  const agent = new Agent({
-    id: "nexo-assist",
-    name: "nexo-assist",
-    instructions: buildInstructions(ctx.requester, ctx.now),
-    model: models.main,
-    tools: createTools(ctx),
-  });
-  const result = await agent.stream(toModelMessages(history, text), {
-    maxSteps: MAX_STEPS,
-    abortSignal: AbortSignal.timeout(LLM_TIMEOUT_MS),
-    // The first step always records what was understood and decided: that is what the transparency panel shows.
-    prepareStep: ({ stepNumber }) => (stepNumber === 0 ? { toolChoice: { type: "tool", toolName: "record_decision" } } : undefined),
-  });
-  await pump(ctx, result.fullStream);
-  ctx.turn.tagDecision("main", models.main.modelId);
+  let used: "main" | "fast" = "main";
+  // Fallback: the fast model takes over when the main one fails; if it fails
+  // too, nothing comes out and the turn ends by handing the conversation to an analyst.
+  for (const candidate of [models.main, models.fast]) {
+    const isMain = candidate === models.main;
+    const agent = new Agent({
+      id: isMain ? "nexo-assist" : "nexo-assist-light",
+      name: isMain ? "nexo-assist" : "nexo-assist-light",
+      instructions: buildInstructions(ctx.requester, ctx.now),
+      model: candidate,
+      tools: createTools(ctx),
+    });
+    try {
+      const result = await agent.stream(toModelMessages(history, text), {
+        maxSteps: MAX_STEPS,
+        abortSignal: AbortSignal.timeout(LLM_TIMEOUT_MS),
+        // The first step always records what was understood and decided: that is what the transparency panel shows.
+        prepareStep: ({ stepNumber }) => (stepNumber === 0 ? { toolChoice: { type: "tool", toolName: "record_decision" } } : undefined),
+      });
+      await pump(ctx, result.fullStream);
+      used = isMain ? "main" : "fast";
+      break;
+    } catch (error) {
+      console.error(`[agent] modelo ${candidate.modelId} falhou`, error);
+      if (isMain) ctx.emit({ type: "step", step: { label: "modelo principal indisponível, usando o modelo leve" } });
+      // Anything already streamed counts as the answer: don't retry.
+      if (ctx.turn.hasContent) break;
+    }
+  }
+  ctx.turn.tagDecision(used, used === "main" ? models.main.modelId : models.fast.modelId);
   console.info(`[agent] main model finished in ${Date.now() - mainStarted} ms`);
 
   if (!ctx.turn.hasContent && !ctx.state.handoff) {
-    ctx.emit({ type: "text", delta: "Não consegui montar uma resposta agora. Pode reformular o pedido?" });
+    // The request was not completed: hand the conversation to a human and tell the employee.
+    ctx.state.handoff = { reason: "unavailable", summary: text };
+    ctx.emit({ type: "text", delta: "Não consegui montar uma resposta agora e estou transferindo você para um analista." });
   }
 }
 

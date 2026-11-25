@@ -256,7 +256,7 @@ export function createTools(ctx: TurnContext) {
     description:
       "Transfere a conversa para um analista humano (suporte N2). Use quando a pessoa pedir, quando for crítico, quando o chamado estiver vencido e ela aceitar, ou quando você não tiver segurança. Depois de chamar, avise que encaminhou e informe o prazo retornado.",
     inputSchema: z.object({
-      reason: z.enum(["requested", "critical", "overdue", "low_confidence"]),
+      reason: z.enum(["requested", "critical", "overdue", "low_confidence", "unavailable"]),
       summary: z.string().describe("Resumo do caso para o analista: o que a pessoa relatou, o que já foi tentado e o chamado envolvido"),
       ticketCode: z.string().optional(),
       confidence: z.number().min(0).max(1).optional().describe("Sua segurança sobre o que fazer, se o motivo for low_confidence"),

@@ -63,6 +63,9 @@ export function tagOf(
       if (handoff?.reason === "critical") {
         return { tone: "danger", label: `Transferida · ${remainingLabel(handoff.respondBy, now) ?? "crítico"}` };
       }
+      if (handoff?.reason === "unavailable") {
+        return { tone: "danger", label: `Transferida · agente indisponível${info.ticketCode ? ` · ${info.ticketCode}` : ""}` };
+      }
       return { tone: "danger", label: `Transferida${info.ticketCode ? ` · ${info.ticketCode}` : ""}` };
     }
     case "mine":
