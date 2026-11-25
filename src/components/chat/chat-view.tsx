@@ -2,7 +2,7 @@
 
 import { ArrowUp, Loader2 } from "lucide-react";
 import { Fragment, useEffect, useRef, useState } from "react";
-import { pollConversation } from "@/app/chat/actions";
+import { pollConversation, startNewConversation } from "@/app/chat/actions";
 import { MAX_SESSION_MESSAGES, type AgentMessageView, type ChatAction, type ChatMessageView, type TurnEvent, type TurnInput } from "@/domain/chat";
 import { applyAction, pendingDraftId } from "@/domain/chat-state";
 import { TurnAssembler } from "@/domain/turn-assembler";
@@ -53,6 +53,15 @@ export function ChatView({
     });
     setUsed((n) => n + 1);
     setPending(true);
+
+    // At the session limit: close the old conversation and open a new one; the turn runs in the new one.
+    if (used >= MAX_SESSION_MESSAGES) {
+      const poll = await startNewConversation();
+      if (poll.status === "open") {
+        setUsed(poll.used);
+        setMessages((current) => [...current.filter((m) => m.id === "greeting"), ...poll.messages]);
+      }
+    }
 
     const assembler = new TurnAssembler();
     try {

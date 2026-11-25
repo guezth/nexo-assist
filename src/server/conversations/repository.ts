@@ -271,6 +271,14 @@ export class ConversationRepository {
     });
   }
 
+  /** Closes a conversation so the employee can start a new session (e.g. after the message limit). */
+  async closeForNewSession(conversationId: number): Promise<void> {
+    await this.db.execute({
+      sql: "UPDATE conversations SET mode = 'closed', closed_by = 'agent', updated_at = ? WHERE id = ? AND mode != 'closed'",
+      args: [this.now().toISOString(), conversationId],
+    });
+  }
+
   // ---------- Analyst side (console) ----------
 
   async findById(conversationId: number): Promise<Conversation | null> {

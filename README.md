@@ -191,7 +191,7 @@ Pontos conhecidos:
 - **Busca semântica** na central de ajuda, com a relevância no painel.
 - **Tempo real de verdade** (SSE ou WebSocket) e indicador de "digitando".
 - **Chamados persistentes** num serviço separado e feriados no cálculo de prazo.
-- **Nova conversa** depois do limite de 30 mensagens, e métricas (tempo de resposta, taxa de transferência, uso por modelo).
+- **Métricas do agent** (tempo de resposta, taxa de transferência, uso por modelo) — items que ainda não têm métricas detalhadas.
 - **Acessibilidade e responsivo** do console, hoje pensado para desktop.
 
 ## Uso de IA
