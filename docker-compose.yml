@@ -1,0 +1,39 @@
+# Nexo Assist. Works with `docker compose up -d --build` and as a Portainer stack
+# (Stacks > Add stack > Repository, then fill the variables in "Environment variables").
+#
+# Required: SESSION_SECRET (32+ characters).
+#   Generate: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+
+services:
+  nexo-assist:
+    build: .
+    image: nexo-assist:latest
+    container_name: nexo-assist
+    restart: unless-stopped
+    ports:
+      - "${PORT:-3000}:3000"
+    environment:
+      # Signed session cookie. The app refuses to start in production without it.
+      SESSION_SECRET: "${SESSION_SECRET:?Defina SESSION_SECRET com 32+ caracteres}"
+      # "true" only when the site is served over HTTPS (directly or behind a proxy).
+      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
+
+      # LLM (Ollama, OpenAI-compatible endpoint). No key: access is authorized by IP.
+      OLLAMA_BASE_URL: "${OLLAMA_BASE_URL:?Defina OLLAMA_BASE_URL (ex. http://servidor:11434)}"
+      OLLAMA_MODEL_MAIN: ${OLLAMA_MODEL_MAIN:-kimi-k2.6:cloud}
+      OLLAMA_MODEL_FAST: ${OLLAMA_MODEL_FAST:-gemma4:31b-cloud}
+
+      # Simulated legacy ticket system (set the failure rate to 0 for a calm demo).
+      TICKET_SERVICE_FAILURE_RATE: ${TICKET_SERVICE_FAILURE_RATE:-0.1}
+      TICKET_SERVICE_OUTAGE_MS: ${TICKET_SERVICE_OUTAGE_MS:-3000}
+      TICKET_SERVICE_LATENCY_MIN_MS: ${TICKET_SERVICE_LATENCY_MIN_MS:-80}
+      TICKET_SERVICE_LATENCY_MAX_MS: ${TICKET_SERVICE_LATENCY_MAX_MS:-400}
+
+      # Demo conversations in the analyst console, created once on an empty database.
+      SEED_DEMO_CONVERSATIONS: ${SEED_DEMO_CONVERSATIONS:-true}
+      DATABASE_URL: file:/app/data/nexo.db
+    volumes:
+      - nexo-data:/app/data
+
+volumes:
+  nexo-data:
