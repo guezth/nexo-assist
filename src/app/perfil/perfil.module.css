@@ -1,0 +1,184 @@
+/* Measures follow the "Meu perfil" frame of the prototype (content column 600px at 1440). */
+
+.page {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  justify-content: center;
+  padding: 48px 40px;
+}
+
+.content {
+  width: 600px;
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+.heading {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.title {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.4px;
+  line-height: 1.2;
+}
+
+.subtitle {
+  margin: 0;
+  font-size: 14.5px;
+  color: var(--ink-3);
+}
+
+.card {
+  overflow: hidden;
+  background: var(--paper);
+  border: 1px solid #1b243117;
+  border-radius: 16px;
+  box-shadow: 0 1px 2px #1b24310d, 0 6px 18px #1b24310a;
+}
+
+.dataRow {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px 24px;
+}
+
+.dataRowDivided {
+  border-bottom: 1px solid var(--rule);
+}
+
+.key {
+  flex: none;
+  width: 160px;
+  font-size: 13.5px;
+  color: var(--ink-3);
+}
+
+.value {
+  flex: 1;
+  min-width: 0;
+  font-size: 14.5px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.note {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12.5px;
+  color: var(--ink-3);
+}
+
+.passwordRow {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 24px;
+}
+
+.iconWrap {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--desk);
+  color: var(--ink-2);
+}
+
+.passwordText {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.passwordTitle {
+  margin: 0;
+  font-size: 14.5px;
+  font-weight: 600;
+}
+
+.passwordMeta {
+  font-size: 13.5px;
+  color: var(--ink-3);
+}
+
+.reset {
+  flex: none;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 14px 0 12px;
+  background: var(--paper);
+  border: 1px solid #1b24311f;
+  border-radius: 8px;
+  box-shadow: 0 1px 2px #1b24310d;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+
+.reset:hover:not(:disabled) {
+  background: #1b24310a;
+}
+
+.reset:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.helper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 24px;
+  background: var(--desk);
+  border-top: 1px solid var(--rule);
+  font-size: 13px;
+  color: var(--ink-3);
+}
+
+.spin {
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spin {
+    animation: none;
+  }
+}
+
+@media (max-width: 899px) {
+  .page {
+    padding: 32px 16px;
+  }
+  .dataRow {
+    flex-wrap: wrap;
+    gap: 4px 16px;
+  }
+  .passwordRow {
+    flex-wrap: wrap;
+  }
+}
