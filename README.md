@@ -18,6 +18,8 @@ O funcionário conversa com o agent para tirar dúvidas, abrir, atualizar ou rea
 
 ## Como rodar
 
+> **Para entrar:** use qualquer e-mail da tabela de [usuários de exemplo](#usuários-de-exemplo) com a senha **`nexo123`**. Ela é a senha cadastrada no banco; qualquer outra é recusada. Exemplo: `ana.souza@nexo.com.br` / `nexo123` (funcionária) e `rafael.lima@nexo.com.br` / `nexo123` (analista).
+
 Requisitos: **Node 22.13 ou superior** (o Mastra 1.x exige; há um `.nvmrc`) e acesso ao servidor Ollama.
 
 ```bash
@@ -31,6 +33,8 @@ O `.env.example` já traz o endereço do Ollama, os dois modelos e as demais var
 ### Usuários de exemplo
 
 A senha de todos é a cadastrada, `nexo123`: ela fica **no banco**, guardada como hash (scrypt, com sal próprio por pessoa), e é o que o login confere. Qualquer outra senha é recusada.
+
+> **Sobre o enunciado.** O PRD sugere que o login do protótipo aceite os funcionários de exemplo "com qualquer senha". Preferi o caminho mais próximo de um sistema real: as pessoas e as senhas ficam no banco e o login confere o hash cadastrado. O custo é que é preciso usar `nexo123` (indicada acima, na tela de login do README e no formulário da entrega). Aceitar qualquer senha seria uma mudança de poucas linhas em `authenticate` (`src/server/auth/users.ts`), mas deixaria qualquer pessoa entrar como qualquer funcionário ou analista, o que não quero num deploy público.
 
 | Papel | E-mail | Observação |
 | --- | --- | --- |
@@ -195,6 +199,7 @@ A ideia central: **o modelo propõe, o código dispõe**. O que não pode errar 
 - **Dois modelos.** O modelo leve (gemma) decide em menos de 1 s se vale acionar o principal: assuntos fora de TI e cumprimentos não gastam o modelo caro nem esperam 15 segundos. O kimi, mais lento e mais capaz, fica com o raciocínio e as ferramentas. Em troca, o roteador pode errar; por isso só age com confiança alta e, na dúvida, passa adiante.
 - **Mastra 1.x com o AI SDK v6.** O modelo é acessado pelo endpoint compatível com OpenAI do Ollama (`@ai-sdk/openai-compatible`). As ferramentas são tipadas com zod 4 e criadas por turno, em volta do contexto do funcionário.
 - **SQLite via `@libsql/client`.** O `better-sqlite3` precisa compilar código nativo; o libsql traz binário pronto e é o que o Mastra usa. Arquivo único, simples de colocar num volume.
+- **Login com a senha cadastrada, não com qualquer senha.** Os usuários, os níveis de acesso e os hashes (scrypt, sal por pessoa) ficam na tabela `users`. É uma divergência consciente do PRD, justificada em "Usuários de exemplo". O nível de acesso é lido do banco a cada requisição, então um cookie adulterado não sobe de nível.
 - **Busca por palavras na central de ajuda.** Explicável (a relevância aparece no painel) e sem dependência externa. Não entende sinônimos; uma busca semântica entraria no lugar sem mudar quem a chama (`KnowledgeBase`).
 - **SSE para tempo real.** O console usa Server-Sent Events (`/console/events`) para atualizações instantâneas. O funcionário usa SSE (`/chat/events`) com fallback de polling a cada 5 s. Mantém o deploy simples sem WebSocket.
 - **A confiança vem do próprio modelo.** É um indício, não uma medida calibrada. Por isso as regras importantes (crítico, duplicidade, confirmação) não dependem dela.
