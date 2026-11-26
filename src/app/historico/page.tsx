@@ -6,6 +6,7 @@ import { getSession } from "@/server/auth/session";
 import { listHistory } from "./actions";
 import styles from "./historico.module.css";
 
+export const instant = false;
 export const metadata = { title: "Histórico de atendimentos" };
 
 function formatDate(iso: string) {

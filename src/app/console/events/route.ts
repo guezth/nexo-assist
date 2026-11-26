@@ -3,8 +3,6 @@ import { getSession } from "@/server/auth/session";
 import { getConversations } from "@/server/conversations";
 import { sortSummaries, toRow } from "@/server/console/views";
 
-export const dynamic = "force-dynamic";
-
 const UPDATE_EVERY_MS = 2500;
 
 /**
