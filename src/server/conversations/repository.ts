@@ -133,13 +133,55 @@ function infoFromRow(row: Record<string, unknown>): ConversationInfo {
   };
 }
 
+/** What the employee side needs from a conversation store. */
+export interface EmployeeConversationStore {
+  findActive(employeeId: number): Promise<Conversation | null>;
+  getOrCreateActive(employeeId: number): Promise<Conversation>;
+  addUserMessage(conversationId: number, text: string): Promise<UserMessageView>;
+  addAgentMessage(conversationId: number, message: Omit<AgentMessageView, "id" | "at">): Promise<AgentMessageView>;
+  applyAction(conversationId: number, action: ChatAction): Promise<void>;
+  setDraftOutcome(conversationId: number, draftId: string, outcome: "confirmed" | "edited" | "cancelled"): Promise<void>;
+  cancelPendingDrafts(conversationId: number): Promise<void>;
+  closeForNewSession(conversationId: number): Promise<void>;
+}
+
+/** What the analyst console needs from a conversation store. */
+export interface AnalystConversationStore {
+  findById(conversationId: number): Promise<Conversation | null>;
+  listForConsole(): Promise<ConversationSummary[]>;
+  listByEmployee(employeeId: number): Promise<ConversationSummary[]>;
+  takeOver(conversationId: number, analyst: Analyst): Promise<void>;
+  addAnalystMessage(conversationId: number, analyst: Analyst, text: string): Promise<AnalystMessageView>;
+  setTyping(conversationId: number, typing: boolean): Promise<void>;
+  returnToAgent(conversationId: number, analyst: Analyst): Promise<void>;
+  close(conversationId: number, analyst: Analyst): Promise<void>;
+}
+
+/** Metrics and feedback collected per conversation. */
+export interface ConversationMetricsStore {
+  recordMetric(metric: TurnMetric): Promise<void>;
+  metricsByConversation(conversationId: number): Promise<TurnMetric[]>;
+  rateMessage(conversationId: number, messageId: number, rating: FeedbackRating): Promise<boolean>;
+}
+
+/** Handoff and closure operations. */
+export interface HandoffStore {
+  handOff(conversationId: number, input: { reason: HandoffReason; respondBy?: string; confidence?: number; summary?: string; ticketCode?: string; team?: string }): Promise<void>;
+  closeByAgent(conversationId: number): Promise<void>;
+}
+
 /**
  * Conversations of the chat, stored in SQLite so they survive a restart.
  * An employee has one open conversation at a time (the session); the employee
  * side always looks it up by the id that comes from the signed session. The
  * analyst side (console) works on conversations by id.
+ *
+ * This class implements several role-specific interfaces so callers can depend
+ * only on the slice they need (Interface Segregation Principle).
  */
-export class ConversationRepository {
+export class ConversationRepository
+  implements EmployeeConversationStore, AnalystConversationStore, ConversationMetricsStore, HandoffStore
+{
   constructor(
     private readonly db: Client,
     private readonly now: () => Date = () => new Date(),
