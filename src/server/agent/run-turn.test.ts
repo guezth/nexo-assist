@@ -29,10 +29,31 @@ vi.mock("@mastra/core/agent", () => {
 
 import { TurnAssembler } from "@/domain/turn-assembler";
 import type { TurnContext } from "./context";
+import type { AgentPort } from "./agent-port";
 import type { AgentModels } from "./models";
 import { runAgentTurn } from "./run-turn";
 
-const models = { main: { modelId: "kimi-mock" }, fast: { modelId: "gemma-mock" } } as unknown as AgentModels;
+function createMockPort(modelId: string, agentId: string): AgentPort {
+  return {
+    get modelId() {
+      return modelId;
+    },
+    async generate() {
+      return { text: "it 0.9" };
+    },
+    async stream() {
+      if (agentId === "nexo-assist") throw new Error("modelo principal falhou");
+      if (agentId === "nexo-assist-light" && mockState.failFast) throw new Error("modelo leve falhou");
+      return {
+        fullStream: (async function* () {
+          yield { type: "text-delta", payload: { text: "resposta pelo modelo leve" } };
+        })(),
+      };
+    },
+  };
+}
+
+const models = { main: createMockPort("kimi-mock", "nexo-assist"), fast: createMockPort("gemma-mock", "nexo-assist-light") } as AgentModels;
 
 function makeCtx() {
   const turn = new TurnAssembler();

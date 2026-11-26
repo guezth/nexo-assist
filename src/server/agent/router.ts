@@ -1,5 +1,4 @@
-import { Agent } from "@mastra/core/agent";
-import type { LanguageModel } from "./types";
+import type { AgentPort } from "./agent-port";
 
 export type Route = { intent: "it" | "out_of_scope" | "social"; confidence: number };
 
@@ -10,11 +9,10 @@ const ROUTER_INSTRUCTIONS = `Você classifica a mensagem de um funcionário para
 Na dúvida, responda "it".`;
 
 /** The small model decides whether the big one is needed at all. Any doubt or failure means "it". */
-export async function routeMessage(model: LanguageModel, text: string, lastAgentText: string | null): Promise<Route> {
+export async function routeMessage(port: AgentPort, text: string, lastAgentText: string | null): Promise<Route> {
   try {
-    const agent = new Agent({ id: "router", name: "router", instructions: ROUTER_INSTRUCTIONS, model });
     const prompt = lastAgentText ? `Última fala do assistente: "${lastAgentText}"\nMensagem do funcionário: "${text}"` : `Mensagem do funcionário: "${text}"`;
-    const result = await agent.generate(prompt);
+    const result = await port.generate(ROUTER_INSTRUCTIONS, prompt);
     const match = result.text.trim().toLowerCase().match(/(it|fora|social)\D*([01](?:[.,]\d+)?)?/);
     if (!match) return { intent: "it", confidence: 0.5 };
     const confidence = match[2] ? Math.min(1, Number(match[2].replace(",", "."))) : 0.5;

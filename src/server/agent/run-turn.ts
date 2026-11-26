@@ -1,4 +1,3 @@
-import { Agent } from "@mastra/core/agent";
 import type { ChatMessageView } from "@/domain/chat";
 import { messageText } from "@/domain/chat-text";
 import type { TurnContext } from "./context";
@@ -42,10 +41,9 @@ function historyText(message: ChatMessageView): string | null {
 const SUMMARY_INSTRUCTIONS = `Resuma a conversa em até 4 frases, em português do Brasil, mantendo: o que foi pedido, o que já foi decidido ou feito, chamados citados (código e título) e pendências. Responda SÓ o resumo.`;
 
 /** Summarizes older messages, so long conversations keep their beginning. */
-async function summarizeDropped(dropped: HistoryMessage[], models: AgentModels): Promise<string> {
+async function summarizeDropped(dropped: HistoryMessage[], port: AgentModels["fast"]): Promise<string> {
   try {
-    const agent = new Agent({ id: "nexo-assist-light", name: "nexo-assist-light", instructions: SUMMARY_INSTRUCTIONS, model: models.fast });
-    const result = await agent.generate(dropped.map((m) => `[${m.role === "user" ? "funcionária" : "agent"}] ${m.content}`).join("\n"));
+    const result = await port.generate(SUMMARY_INSTRUCTIONS, dropped.map((m) => `[${m.role === "user" ? "funcionária" : "agent"}] ${m.content}`).join("\n"));
     return result.text.trim() || "Conversa anterior sem detalhes suficientes.";
   } catch (error) {
     console.error("[agent] falhou o resumo da conversa antiga", error);
@@ -66,7 +64,7 @@ export async function buildHistory(messages: ChatMessageView[], models: AgentMod
   const dropped = asHistory(messages.slice(0, -MAX_HISTORY));
   const history = asHistory(messages.slice(-MAX_HISTORY));
   if (dropped.length > 0) {
-    const summary = await summarizeDropped(dropped, models);
+    const summary = await summarizeDropped(dropped, models.fast);
     history.unshift({ role: "user", content: `Resumo da conversa anterior: ${summary}` });
   }
   return history;
@@ -89,15 +87,15 @@ export interface RunAgentTurnResult {
 }
 
 /** Tokens reported by the stream result, when the model provides them (defensive). */
-function usageOf(result: unknown): { inputTokens?: number; outputTokens?: number } {
-  const usage = (result as { usage?: { inputTokens?: number; outputTokens?: number; promptTokens?: number; completionTokens?: number } }).usage;
+function usageOf(result: { usage?: { inputTokens?: number; outputTokens?: number; promptTokens?: number; completionTokens?: number } }): { inputTokens?: number; outputTokens?: number } {
+  const usage = result.usage;
   if (!usage) return {};
   return { inputTokens: usage.inputTokens ?? usage.promptTokens, outputTokens: usage.outputTokens ?? usage.completionTokens };
 }
 
 /**
  * One turn of the agent. Text and tool results are sent through ctx.emit as they
- * happen. Throws if the model is unreachable; the caller turns that into an error.
+ * happen. Throws if the model is unreachable; the caller turns that into an error event.
  */
 export async function runAgentTurn(ctx: TurnContext, text: string, history: HistoryMessage[], models: AgentModels): Promise<RunAgentTurnResult> {
   const lastAgent = [...history].reverse().find((m) => m.role === "assistant")?.content ?? null;
@@ -116,8 +114,9 @@ export async function runAgentTurn(ctx: TurnContext, text: string, history: Hist
       source: "fast",
       model: models.fast.modelId,
     });
-    const agent = new Agent({ id: "nexo-assist-light", name: "nexo-assist-light", instructions: SOCIAL_AND_SCOPE_INSTRUCTIONS, model: models.fast });
-    const result = await agent.stream(toModelMessages(history, text), { abortSignal: AbortSignal.timeout(LLM_TIMEOUT_MS) });
+    const result = await models.fast.stream(SOCIAL_AND_SCOPE_INSTRUCTIONS, toModelMessages(history, text), undefined, {
+      abortSignal: AbortSignal.timeout(LLM_TIMEOUT_MS),
+    });
     await pump(ctx, result.fullStream);
     return { model: "fast", modelId: models.fast.modelId, routeIntent: route.intent, durationMs: Date.now() - started, ...usageOf(result) };
   }
@@ -131,20 +130,18 @@ export async function runAgentTurn(ctx: TurnContext, text: string, history: Hist
   // too, nothing comes out and the turn ends by handing the conversation to an analyst.
   for (const candidate of [models.main, models.fast]) {
     const isMain = candidate === models.main;
-    const agent = new Agent({
-      id: isMain ? "nexo-assist" : "nexo-assist-light",
-      name: isMain ? "nexo-assist" : "nexo-assist-light",
-      instructions: buildInstructions(ctx.requester, ctx.now),
-      model: candidate,
-      tools: createTools(ctx),
-    });
     try {
-      const result = await agent.stream(toModelMessages(history, text), {
-        maxSteps: MAX_STEPS,
-        abortSignal: AbortSignal.timeout(LLM_TIMEOUT_MS),
-        // The first step always records what was understood and decided: that is what the transparency panel shows.
-        prepareStep: ({ stepNumber }) => (stepNumber === 0 ? { toolChoice: { type: "tool", toolName: "record_decision" } } : undefined),
-      });
+      const result = await candidate.stream(
+        buildInstructions(ctx.requester, ctx.now),
+        toModelMessages(history, text),
+        createTools(ctx),
+        {
+          maxSteps: MAX_STEPS,
+          abortSignal: AbortSignal.timeout(LLM_TIMEOUT_MS),
+          // The first step always records what was understood and decided: that is what the transparency panel shows.
+          prepareStep: ({ stepNumber }) => (stepNumber === 0 ? { toolChoice: { type: "tool", toolName: "record_decision" } } : undefined),
+        },
+      );
       await pump(ctx, result.fullStream);
       used = isMain ? "main" : "fast";
       modelId = candidate.modelId;
@@ -177,10 +174,11 @@ export async function runAgentTurn(ctx: TurnContext, text: string, history: Hist
   };
 }
 
-type StreamChunk = { type: string; payload?: { text?: string; error?: unknown } };
-
-async function pump(ctx: TurnContext, stream: unknown): Promise<void> {
-  for await (const chunk of stream as AsyncIterable<StreamChunk>) {
+async function pump(
+  ctx: TurnContext,
+  stream: AsyncIterable<{ type: string; payload?: { text?: string; error?: unknown } }>,
+): Promise<void> {
+  for await (const chunk of stream) {
     if (chunk.type === "text-delta" && chunk.payload?.text) {
       ctx.emit({ type: "text", delta: chunk.payload.text });
     } else if (chunk.type === "error") {

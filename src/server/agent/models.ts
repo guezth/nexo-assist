@@ -1,4 +1,5 @@
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
+import { createAgentPort, type AgentPort } from "./agent-port";
 
 /**
  * Two models behind one Ollama server (OpenAI-compatible endpoint):
@@ -8,9 +9,11 @@ import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 export function createModels(env: Record<string, string | undefined> = process.env) {
   const baseURL = `${(env.OLLAMA_BASE_URL || "http://localhost:11434").replace(/\/+$/, "")}/v1`;
   const ollama = createOpenAICompatible({ name: "ollama", baseURL });
+  const main = ollama(env.OLLAMA_MODEL_MAIN || "kimi-k2.6:cloud");
+  const fast = ollama(env.OLLAMA_MODEL_FAST || "gemma4:31b-cloud");
   return {
-    main: ollama(env.OLLAMA_MODEL_MAIN || "kimi-k2.6:cloud"),
-    fast: ollama(env.OLLAMA_MODEL_FAST || "gemma4:31b-cloud"),
+    main: createAgentPort(main),
+    fast: createAgentPort(fast),
   };
 }
 
@@ -27,4 +30,4 @@ export function estimateCostUsd(model: "main" | "fast", inputTokens?: number, ou
   return ((inputTokens ?? 0) * rates.input + (outputTokens ?? 0) * rates.output) / 1_000_000;
 }
 
-export type AgentModels = ReturnType<typeof createModels>;
+export type AgentModels = { main: AgentPort; fast: AgentPort };
