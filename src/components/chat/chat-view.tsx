@@ -1,15 +1,12 @@
 "use client";
 
 import { ArrowUp, Loader2 } from "lucide-react";
-import { Fragment, useEffect, useRef, useState } from "react";
-import { pollConversation, rateAnswerAction, startNewConversation } from "@/app/chat/actions";
-import { MAX_SESSION_MESSAGES, type AgentMessageView, type ChatAction, type ChatMessageView, type TurnEvent, type TurnInput } from "@/domain/chat";
-import type { FeedbackRating } from "@/domain/feedback";
-import { applyAction, pendingDraftId } from "@/domain/chat-state";
-import { TurnAssembler } from "@/domain/turn-assembler";
+import { Fragment } from "react";
+import { MAX_SESSION_MESSAGES, type ChatMessageView } from "@/domain/chat";
 import styles from "./chat.module.css";
 import { AgentMessage, AnalystMessage, SystemLine, UserMessage } from "./message-blocks";
 import { TransparencyPanel } from "./transparency-panel";
+import { useChat } from "./use-chat";
 
 export function ChatView({
   initialMessages,
@@ -18,206 +15,34 @@ export function ChatView({
   conversationId,
 }: {
   initialMessages: ChatMessageView[];
-  /** Messages the employee already sent in this session. */
   initialUsed: number;
-  /** The conversation is with the support team (the agent is muted). */
   initialWithSupport?: boolean;
-  /** The specific conversation being viewed, when loaded from history. */
   conversationId?: number;
 }) {
-  const [messages, setMessages] = useState(initialMessages);
-  const [used, setUsed] = useState(initialUsed);
-  const [text, setText] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [withSupport, setWithSupport] = useState(initialWithSupport);
-  const [pending, setPending] = useState(false);
-  const [typing, setTyping] = useState(false);
-  /** The agent's answer while it is still being written. */
-  const [live, setLive] = useState<AgentMessageView | null>(null);
-  /** The answer whose decision is open in the side panel. */
-  const [inspectedId, setInspectedId] = useState<string | null>(null);
-  const listRef = useRef<HTMLDivElement>(null);
-  const counter = useRef(0);
-  // Messages already on screen when the page opened do not animate; the ones that arrive later do.
-  const [initialIds] = useState(() => new Set(initialMessages.map((m) => m.id)));
-
-  const limitReached = used >= MAX_SESSION_MESSAGES;
-  const busy = pending || limitReached;
-
-  useEffect(() => {
-    const el = listRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [messages, pending, live]);
-
-  async function submit(input: TurnInput, shown: string, action?: ChatAction) {
-    if (busy) return;
-    setError(null);
-    setMessages((current) => {
-      const marked = action ? applyAction(current, action) : current;
-      return [...marked, { id: `user-${++counter.current}`, role: "user", text: shown }];
-    });
-    setUsed((n) => n + 1);
-    setPending(true);
-
-    // At the session limit: close the old conversation and open a new one; the turn runs in the new one.
-    if (used >= MAX_SESSION_MESSAGES) {
-      const poll = await startNewConversation();
-      if (poll.status === "open") {
-        setUsed(poll.used);
-        setMessages((current) => [...current.filter((m) => m.id === "greeting"), ...poll.messages]);
-      }
-    }
-
-    const assembler = new TurnAssembler();
-    try {
-      const response = await fetch("/chat/stream", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ input, conversationId }),
-      });
-      if (!response.ok || !response.body) throw new Error(`HTTP ${response.status}`);
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      for (;;) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() ?? "";
-        for (const line of lines) {
-          if (line.trim()) handleEvent(JSON.parse(line) as TurnEvent, assembler);
-        }
-      }
-    } catch {
-      setError("Não consegui responder agora. Tente de novo em instantes.");
-    } finally {
-      setPending(false);
-      setLive(null);
-    }
-  }
-
-  function handleEvent(event: TurnEvent, assembler: TurnAssembler) {
-    switch (event.type) {
-      case "step":
-      case "text":
-      case "block":
-      case "question":
-        assembler.apply(event);
-        setLive(assembler.snapshot("live"));
-        break;
-      case "done":
-        if (event.message) setMessages((current) => [...current, event.message!]);
-        if (event.withSupport) setWithSupport(true);
-        break;
-      case "error":
-        if (event.reason === "limit") {
-          // The server is the one that counts: show its limit.
-          setUsed(MAX_SESSION_MESSAGES);
-          setError("Você chegou ao limite de mensagens desta sessão.");
-        } else {
-          setError(
-            event.reason === "unavailable"
-              ? "O assistente está indisponível no momento. Tente de novo em instantes."
-              : "Não consegui responder agora. Tente de novo em instantes.",
-          );
-        }
-        break;
-    }
-  }
-
-  // While the support team has the conversation, listen for real-time events.
-  useEffect(() => {
-    if (!withSupport) return;
-
-    const source = new EventSource("/chat/events");
-    source.onmessage = async (event) => {
-      try {
-        const push = JSON.parse(event.data) as { type: string; payload?: { conversationId?: number; typing?: boolean } };
-        if (push.payload?.conversationId && push.payload.conversationId !== conversationId) return;
-        const poll = await pollConversation(conversationId);
-        if (poll.status === "closed") {
-          setWithSupport(false);
-          setTyping(false);
-          setUsed(0);
-          setMessages((current) => [
-            ...current,
-            { id: "closed", role: "system", icon: "close", text: "Atendimento encerrado pela equipe de TI" },
-          ]);
-        } else {
-          setWithSupport(poll.mode === "analyst");
-          setTyping(poll.typing);
-          setMessages((current) => [...current.filter((m) => m.id === "greeting"), ...poll.messages]);
-        }
-      } catch {
-        // Keep calm; the next event or the fallback timer will retry.
-      }
-    };
-
-    // Fallback: if SSE disconnects, poll every 5s until it reconnects.
-    const fallback = setInterval(async () => {
-      if (source.readyState === EventSource.CLOSED) {
-        try {
-          const poll = await pollConversation(conversationId);
-          if (poll.status === "closed") {
-            setWithSupport(false);
-            setTyping(false);
-            setUsed(0);
-            setMessages((current) => [...current, { id: "closed", role: "system", icon: "close", text: "Atendimento encerrado pela equipe de TI" }]);
-          } else {
-            setWithSupport(poll.mode === "analyst");
-            setTyping(poll.typing);
-            setMessages((current) => [...current.filter((m) => m.id === "greeting"), ...poll.messages]);
-          }
-        } catch {
-          // Try again on the next tick.
-        }
-      }
-    }, 5000);
-
-    return () => {
-      source.close();
-      clearInterval(fallback);
-    };
-  }, [withSupport, conversationId]);
-
-  const inspected = messages.find((m): m is AgentMessageView => m.role === "agent" && m.id === inspectedId) ?? null;
-
-  const onAction = (action: ChatAction) => submit(action, action.label, action);
-
-  /** Records the employee's rating of an answer. */
-  async function rate(messageId: string, rating: FeedbackRating): Promise<void> {
-    try {
-      await rateAnswerAction(Number(messageId.slice(1)), rating, conversationId);
-      setMessages((current) => current.map((m) => (m.role === "agent" && m.id === messageId ? { ...m, feedback: { rating } } : m)));
-    } catch {
-      // Nothing breaks if it fails: the buttons simply stay.
-    }
-  }
-
-  function onSubmit(event: React.FormEvent) {
-    event.preventDefault();
-    const value = text.trim();
-    if (!value) return;
-    setText("");
-    submit({ type: "text", text: value }, value);
-  }
-
-  // ⌘↵ / Ctrl+↵ confirms the draft that is waiting for a decision.
-  const draftId = pendingDraftId(messages);
-  useEffect(() => {
-    if (!draftId) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
-        event.preventDefault();
-        onAction({ type: "draft", draftId, decision: "confirm", label: "Confirmar" });
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draftId, busy]);
+  const {
+    messages,
+    used,
+    text,
+    setText,
+    error,
+    typing,
+    pending,
+    live,
+    inspected,
+    setInspectedId,
+    initialIds,
+    limitReached,
+    busy,
+    listRef,
+    onAction,
+    rate,
+    onSubmit,
+  } = useChat({
+    initialMessages,
+    initialUsed,
+    initialWithSupport,
+    conversationId,
+  });
 
   return (
     <div className={styles.chat}>
@@ -232,7 +57,15 @@ export function ChatView({
               case "system":
                 return <SystemLine message={message} />;
               case "agent":
-                return <AgentMessage message={message} disabled={busy} onAction={onAction} onInspect={(m) => setInspectedId(m.id)} onRate={(messageId, rating) => void rate(messageId, rating)} />;
+                return (
+                  <AgentMessage
+                    message={message}
+                    disabled={busy}
+                    onAction={onAction}
+                    onInspect={(m) => setInspectedId(m.id)}
+                    onRate={(messageId, rating) => void rate(messageId, rating)}
+                  />
+                );
             }
           })();
           return initialIds.has(message.id) ? (
@@ -243,7 +76,9 @@ export function ChatView({
             </div>
           );
         })}
-        {live && (live.steps.length > 0 || live.blocks.length > 0) && <AgentMessage message={live} disabled onAction={onAction} thinking />}
+        {live && (live.steps.length > 0 || live.blocks.length > 0) && (
+          <AgentMessage message={live} disabled onAction={onAction} thinking />
+        )}
         {pending && !live?.steps.length && !live?.blocks.length && (
           <div className={styles.agent}>
             <div className={styles.statusLine}>
