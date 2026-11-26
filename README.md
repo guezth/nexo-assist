@@ -12,8 +12,9 @@ O funcionário conversa com o agent para tirar dúvidas, abrir, atualizar ou rea
 4. [Como garanti a qualidade das decisões](#como-garanti-a-qualidade-das-decisões)
 5. [Decisões e trade-offs](#decisões-e-trade-offs)
 6. [O que faria com mais tempo](#o-que-faria-com-mais-tempo)
-7. [Uso de IA](#uso-de-ia)
-8. [Deploy com Docker e Portainer](#deploy-com-docker-e-portainer)
+7. [Melhorias implementadas](#melhorias-implementadas)
+8. [Uso de IA](#uso-de-ia)
+9. [Deploy com Docker e Portainer](#deploy-com-docker-e-portainer)
 
 ## Como rodar
 
@@ -54,9 +55,12 @@ Os passos 2, 4, 5 e 6 supõem a Ana (ou a Carla) já devolvida ao agent, como ex
 5. **Reabertura:** como Carla, peça para reabrir o INC-20150 (resolvido há 4 dias). Como Fábio, o INC-20255 (há 8 dias) é recusado.
 6. **Privacidade:** como Ana, pergunte pelo INC-20402 (é do Bruno): a resposta é a mesma de um chamado que não existe.
 7. **Fora de TI:** "quantos dias de férias eu tenho?" é redirecionado.
-8. **Transferência:** "quero falar com um analista". Abra o console em outra janela (Rafael), assuma, responda e veja a resposta aparecer para o funcionário. Depois devolva ao agent ou encerre.
-9. **Transparência:** em qualquer resposta do agent, clique em **detalhes**.
-10. **Queda do sistema de chamados:** o sistema legado simulado falha em 10% das chamadas. Com `TICKET_SERVICE_FAILURE_RATE=1` no `.env`, dá para ver as novas tentativas e o aviso.
+8. **Transferência:** "quero falar com um analista". Abra o console em outra janela (Rafael), assuma, responda e veja a resposta aparecer para o funcionário em tempo real (SSE). Depois devolva ao agent ou encerre.
+9. **Transparência:** em qualquer resposta do agent, clique em **detalhes**. O painel agora mostra também a latência, o modelo usado, os tokens e o custo estimado.
+10. **Feedback:** depois de cada resposta do agent, avalie com **Ótimo** ou **Precisa melhorar**.
+11. **Nova sessão:** envie 30 mensagens (ou mude `MAX_SESSION_MESSAGES` no código) e veja o botão **Iniciar nova sessão**, que fecha a conversa atual e abre outra.
+12. **Histórico:** no menu lateral, acesse **Histórico** para ver todas as conversas passadas e retomar as abertas.
+13. **Queda do sistema de chamados:** o sistema legado simulado falha em 10% das chamadas. Com `TICKET_SERVICE_FAILURE_RATE=1` no `.env`, dá para ver as novas tentativas e o aviso. Os chamados agora são persistentes (SQLite).
 
 ### Comandos
 
@@ -64,6 +68,7 @@ Os passos 2, 4, 5 e 6 supõem a Ana (ou a Carla) já devolvida ao agent, como ex
 npm test           # testes (vitest)
 npm run typecheck  # tsc --noEmit
 npm run lint       # eslint
+npm run eval       # avaliação com modelo real (5 cenários)
 npm run build      # build de produção
 ```
 
@@ -86,10 +91,12 @@ npm run build      # build de produção
 
 ```
 Navegador ──► Next.js (App Router)
-               ├─ /chat, /perfil           telas do funcionário
-               ├─ /chat/stream (POST)      um turno do agent, em streaming (uma linha JSON por evento)
-               ├─ /console                 console do analista (atualiza a cada 5 s)
-               └─ proxy.ts                 redireciona por papel (a sessão é checada de novo nas páginas e nas ações)
+               ├─ /chat, /perfil, /historico  telas do funcionário
+               ├─ /chat/stream (POST)         um turno do agent, em streaming (uma linha JSON por evento)
+               ├─ /chat/events (SSE)          notificações push para o funcionário
+               ├─ /console                    console do analista (SSE em tempo real)
+               ├─ /console/events (SSE)       atualizações em tempo real da lista
+               └─ proxy.ts                    redireciona por papel (a sessão é checada de novo nas páginas e nas ações)
 
 src/domain     regras puras, sem I/O: SLA, prioridade, duplicidade, reabertura, transferência,
                montagem da resposta (TurnAssembler) e os tipos que a tela desenha
@@ -108,7 +115,7 @@ Pontos centrais:
 - **O agent fica dentro de um turno controlado** (`handle-turn.ts`). O turno é quem aplica o limite de mensagens, decide se o agent pode falar, executa confirmações e realiza transferências. O modelo não tem como pular essas regras.
 - **Persistência.** SQLite (`@libsql/client`), com migrações por `PRAGMA user_version`. Guarda as mensagens já no formato que a tela desenha, o modo da conversa (agent, analista ou encerrada), quem assumiu, o motivo e o resumo da transferência.
 - **Analistas online.** O console avisa o servidor a cada 15 s que está aberto; quem passou de 40 s sem avisar (ou saiu pelo botão Sair) deixa de contar. A tela de login mostra esse número real e o atualiza sozinha.
-- **Tempo real.** O funcionário recebe o turno do agent em streaming; enquanto espera um analista, a tela consulta a conversa a cada 4 s. O console se atualiza a cada 5 s. Não usei WebSocket para manter o deploy simples.
+- **Tempo real.** O funcionário recebe o turno do agent em streaming; enquanto espera um analista, a tela usa SSE (`/chat/events`) com fallback de polling. O console usa SSE (`/console/events`) para atualizações em tempo real. Indicador de "digitando" nos dois lados.
 
 ## Como o agent decide o que fazer
 
@@ -117,7 +124,7 @@ Cada mensagem do funcionário passa por este caminho:
 1. **Limite e voz.** O servidor conta a mensagem (máximo de 30 por sessão, em uma única instrução SQL, então requisições simultâneas não passam do limite). Se a conversa está com um analista, o agent **não responde**: a mensagem fica para o analista.
 2. **Cliques da tela.** Confirmar ou cancelar um rascunho é executado **por código**, sem modelo. Escolher uma opção ou um chamado da lista vira uma mensagem normal.
 3. **Roteador (modelo leve, gemma4).** Em menos de 1 s, decide se a mensagem é de TI, social (cumprimento, agradecimento) ou fora do escopo (RH, financeiro, facilities). Nos dois últimos casos, o próprio modelo leve responde. Só se ele tiver confiança de 75% ou mais; qualquer dúvida ou falha segue para o modelo principal.
-4. **Agent principal (kimi-k2.6, via Mastra).** Recebe as últimas 24 mensagens (incluindo o que a tela mostrou: botões, cartões, rascunhos) e as instruções do service desk. O **primeiro passo é obrigatório**: registrar o que entendeu, o que vai fazer, a confiança e o porquê (`record_decision`). Depois usa as ferramentas que precisar, até 8 passos:
+4. **Agent principal (kimi-k2.6, via Mastra).** Recebe as últimas 24 mensagens (as mais antigas são sumarizadas pelo modelo leve, para manter contexto sem estourar o limite de tokens). Inclui o que a tela mostrou: botões, cartões, rascunhos. O **primeiro passo é obrigatório**: registrar o que entendeu, o que vai fazer, a confiança e o porquê (`record_decision`). Depois usa as ferramentas que precisar, até 8 passos. Se o modelo principal falhar, o sistema tenta o modelo leve; se ambos falharem, transfere automaticamente para um analista:
 
 | Ferramenta | O que faz |
 | --- | --- |
@@ -138,7 +145,7 @@ A pedido da pessoa, em caso crítico, em chamado vencido (se a pessoa aceitar) e
 
 ### Transparência
 
-Acima de cada resposta ficam os passos ("consultou seus chamados", "classificou a prioridade"). O botão **detalhes** (no chat e, para o analista, no console) abre um painel lateral com: o que o agent entendeu, o que fez, a confiança (barra e nível), o porquê, **quem decidiu** (modelo principal, modelo leve ou regra do sistema, com o id do modelo) e cada consulta com seu detalhe (artigos encontrados e relevância, chamados vistos, prazo, tentativas contra o sistema instável). O formato é nosso: o protótipo não traz esse painel.
+Acima de cada resposta ficam os passos ("consultou seus chamados", "classificou a prioridade"). O botão **detalhes** (no chat e, para o analista, no console) abre um painel lateral com: o que o agent entendeu, o que fez, a confiança (barra e nível), o porquê, **quem decidiu** (modelo principal, modelo leve ou regra do sistema, com o id do modelo), cada consulta com seu detalhe (artigos encontrados e relevância, chamados vistos, prazo, tentativas contra o sistema instável) e as **métricas do turno**: duração, modelo usado, tokens de entrada/saída e custo estimado em USD. O formato é nosso: o protótipo não traz esse painel.
 
 ## Como garanti a qualidade das decisões
 
@@ -157,7 +164,7 @@ A ideia central: **o modelo propõe, o código dispõe**. O que não pode errar 
 | Sistema de chamados instável | 4 tentativas com espera crescente, cada uma visível como passo; se falhar, o rascunho continua aberto |
 | Falha do modelo | Mensagem clara, conversa continua, tempo máximo de 90 s |
 
-**Testes (99, `npm test`).** Os que mais importam não dependem de modelo: injeto um agent falso e verifico as regras em volta dele.
+**Testes (105, `npm test`).** Os que mais importam não dependem de modelo: injeto um agent falso e verifico as regras em volta dele.
 
 - Privacidade (consulta, listagem, atualização e reabertura de chamado alheio).
 - Confirmação (nada é criado sem clique; confirmar duas vezes não duplica; cancelar não toca no sistema).
@@ -172,10 +179,10 @@ A ideia central: **o modelo propõe, o código dispõe**. O que não pode errar 
 - **Mastra 1.x com o AI SDK v6.** O modelo é acessado pelo endpoint compatível com OpenAI do Ollama (`@ai-sdk/openai-compatible`). As ferramentas são tipadas com zod 4 e criadas por turno, em volta do contexto do funcionário.
 - **SQLite via `@libsql/client`.** O `better-sqlite3` precisa compilar código nativo; o libsql traz binário pronto e é o que o Mastra usa. Arquivo único, simples de colocar num volume.
 - **Busca por palavras na central de ajuda.** Explicável (a relevância aparece no painel) e sem dependência externa. Não entende sinônimos; uma busca semântica entraria no lugar sem mudar quem a chama (`KnowledgeBase`).
-- **Atualização por consulta (polling) em vez de WebSocket.** 4 s no funcionário e 5 s no console. Simples e suficiente para a demonstração; custa algumas requisições a mais.
+- **SSE para tempo real.** O console usa Server-Sent Events (`/console/events`) para atualizações instantâneas. O funcionário usa SSE (`/chat/events`) com fallback de polling a cada 5 s. Mantém o deploy simples sem WebSocket.
 - **A confiança vem do próprio modelo.** É um indício, não uma medida calibrada. Por isso as regras importantes (crítico, duplicidade, confirmação) não dependem dela.
-- **Dados do sistema de chamados em memória.** O sistema "legado" é simulado e volta ao estado inicial ao reiniciar; só as conversas persistem. Mantém a demonstração repetível.
-- **Sem recarregar o histórico inteiro.** O agent lembra das últimas 24 mensagens, o que limita custo e latência, mas conversas muito longas perdem o começo.
+- **Chamados persistentes.** O sistema de chamados agora usa SQLite (`tickets` e `ticket_history`), então os dados sobrevivem a reinicializações.
+- **Sumarização de histórico.** Conversas longas têm as mensagens mais antigas sumarizadas pelo modelo leve antes de serem enviadas ao principal, mantendo contexto sem estourar o limite de tokens.
 
 Pontos conhecidos:
 
@@ -187,12 +194,29 @@ Pontos conhecidos:
 ## O que faria com mais tempo
 
 - **Latência do agent:** menos idas e voltas ao modelo (ferramentas que já devolvam o contexto), cache de consultas dentro do turno e teste de modelos mais rápidos para o passo de decisão.
-- **Avaliação contínua:** um conjunto fixo de conversas (as do roteiro) rodado contra o modelo real a cada mudança de prompt, com a nota por regra, para detectar regressões.
 - **Busca semântica** na central de ajuda, com a relevância no painel.
-- **Tempo real de verdade** (SSE ou WebSocket) e indicador de "digitando".
-- **Chamados persistentes** num serviço separado e feriados no cálculo de prazo.
-- **Métricas do agent** (tempo de resposta, taxa de transferência, uso por modelo) — items que ainda não têm métricas detalhadas.
+- **Feriados** no cálculo de prazo SLA.
 - **Acessibilidade e responsivo** do console, hoje pensado para desktop.
+- **WebSocket** como alternativa ao SSE para cenários de maior escala.
+
+## Melhorias implementadas
+
+Além do escopo original, foram implementadas as seguintes melhorias:
+
+| # | Melhoria | Commit |
+|---|----------|--------|
+| 1 | **Fallback para modelo leve:** se o modelo principal falha, o sistema tenta o modelo leve; se ambos falharem, transfere automaticamente para um analista | `20c4ce5` |
+| 2 | **Nova sessão após limite:** ao atingir 30 mensagens, o funcionário pode iniciar uma nova sessão sem perder o histórico | `f64169a` |
+| 3 | **Métricas por turno:** cada turno registra duração, modelo usado, tokens e custo estimado (USD), exibidos no painel de transparência | `8364a36` |
+| 4 | **Sumarização de histórico:** mensagens além das últimas 24 são sumarizadas pelo modelo leve antes de enviar ao principal | `8e8e2bc` |
+| 5 | **Feedback do funcionário:** botões "Ótimo" e "Precisa melhorar" em cada resposta do agent, com persistência no banco | `4778cb6` |
+| 6 | **Avaliação com modelo real:** `npm run eval` executa 5 cenários contra os modelos reais para detectar regressões | `351bb45` |
+| 7 | **Indicador de "digitando":** o funcionário vê quando o analista está digitando; o console mostra quando o colega digita | `18aa071` |
+| 8 | **Console em tempo real:** SSE (`/console/events`) substitui o polling de 5s na lista de conversas | `1b16ce7` |
+| 9 | **Histórico de conversas:** página `/historico` permite ao funcionário ver e retomar conversas passadas | `05af7ec` |
+| 10 | **Tickets persistentes:** sistema de chamados agora usa SQLite em vez de memória, com seed automático de demo | `19f5472` |
+| 11 | **Notificações push:** SSE (`/chat/events`) notifica o funcionário em tempo real quando o analista envia mensagem ou assume a conversa | `bc30b64` |
+| 12 | **Refatorações SOLID:** extração do hook `useChat` (SRP), interfaces especializadas para `ConversationRepository` (ISP) e abstração `AgentPort` (DIP) | `fd897aa`, `8eaa839`, `67a1e6a` |
 
 ## Uso de IA
 
