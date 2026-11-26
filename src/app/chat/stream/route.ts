@@ -10,6 +10,8 @@ const inputSchema = z.union([
   z.object({ type: z.literal("select-ticket"), code: z.string().max(40), label: z.string().min(1).max(300) }),
 ]);
 
+const bodySchema = z.object({ input: inputSchema, conversationId: z.number().optional() });
+
 /**
  * One turn of the chat, streamed as one JSON event per line: the steps the
  * agent takes and its answer, while they happen. The employee is always the
@@ -20,7 +22,7 @@ export async function POST(request: Request) {
   const requester = session?.role === "employee" ? requesterFor(session.id) : null;
   if (!requester) return new Response("Sessão inválida.", { status: 401 });
 
-  const parsed = inputSchema.safeParse(await request.json().catch(() => null));
+  const parsed = bodySchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return new Response("Mensagem inválida.", { status: 400 });
 
   const encoder = new TextEncoder();
@@ -28,7 +30,7 @@ export async function POST(request: Request) {
     async start(controller) {
       const send = (event: TurnEvent) => controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`));
       try {
-        await handleTurn(requester, parsed.data, await getTurnDeps(), send);
+        await handleTurn(requester, parsed.data.input, await getTurnDeps(), send, parsed.data.conversationId);
       } catch (error) {
         console.error("[chat] unexpected failure", error);
         send({ type: "error", reason: "failed" });

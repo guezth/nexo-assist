@@ -355,6 +355,30 @@ export class ConversationRepository {
     return found.rows[0] ? this.withMessages(infoFromRow(found.rows[0])) : null;
   }
 
+  /** All conversations of one employee, most recent first. */
+  async listByEmployee(employeeId: number): Promise<ConversationSummary[]> {
+    const rows = await this.db.execute(`
+      SELECT c.*,
+        (SELECT id FROM messages m WHERE m.conversation_id = c.id AND m.role != 'system' ORDER BY id DESC LIMIT 1) AS last_id,
+        (SELECT role FROM messages m WHERE m.conversation_id = c.id AND m.role != 'system' ORDER BY id DESC LIMIT 1) AS last_role,
+        (SELECT payload FROM messages m WHERE m.conversation_id = c.id AND m.role != 'system' ORDER BY id DESC LIMIT 1) AS last_payload,
+        (SELECT created_at FROM messages m WHERE m.conversation_id = c.id AND m.role != 'system' ORDER BY id DESC LIMIT 1) AS last_created_at,
+        (SELECT COUNT(*) FROM messages m WHERE m.conversation_id = c.id AND m.role = 'user'
+           AND m.id > COALESCE((SELECT MAX(id) FROM messages WHERE conversation_id = c.id AND role IN ('agent', 'analyst')), 0)) AS unread
+      FROM conversations c
+      WHERE c.employee_id = ?
+      ORDER BY c.updated_at DESC
+    `, [employeeId]);
+    return rows.rows.map((row) => ({
+      ...infoFromRow(row),
+      unread: Number(row.unread),
+      lastMessage:
+        row.last_id === null
+          ? null
+          : messageFromRow({ id: row.last_id, role: row.last_role, payload: row.last_payload, created_at: row.last_created_at }),
+    }));
+  }
+
   /** The latest conversation of each employee, most recently active first. */
   async listForConsole(): Promise<ConversationSummary[]> {
     const rows = await this.db.execute(`

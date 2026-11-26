@@ -16,11 +16,15 @@ function OnlineStatus() {
   );
 }
 
-async function ChatScreen() {
+async function ChatScreen({ searchParams }: { searchParams: Promise<{ conversation?: string }> }) {
   const user = await getSession();
   if (!user || user.role !== "employee") redirect("/login");
 
-  const conversation = await (await getConversations()).findActive(user.id);
+  const params = await searchParams;
+  const conversations = await getConversations();
+  const conversationId = params.conversation ? Number(params.conversation) : undefined;
+  const conversation = conversationId ? await conversations.findById(conversationId) : await conversations.findActive(user.id);
+  if (conversation && conversation.employeeId !== user.id) redirect("/chat");
 
   // Shown above every conversation; it is part of the screen, not of the stored history.
   const greeting: AgentMessageView = {
@@ -40,15 +44,16 @@ async function ChatScreen() {
       <ChatView
         initialMessages={[greeting, ...(conversation?.messages ?? [])]} initialUsed={conversation?.used ?? 0}
         initialWithSupport={conversation?.mode === "analyst"}
+        conversationId={conversation?.id}
       />
     </EmployeeShell>
   );
 }
 
-export default function ChatPage() {
+export default function ChatPage({ searchParams }: { searchParams: Promise<{ conversation?: string }> }) {
   return (
     <Suspense fallback={null}>
-      <ChatScreen />
+      <ChatScreen searchParams={searchParams} />
     </Suspense>
   );
 }

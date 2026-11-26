@@ -15,12 +15,15 @@ export function ChatView({
   initialMessages,
   initialUsed,
   initialWithSupport = false,
+  conversationId,
 }: {
   initialMessages: ChatMessageView[];
   /** Messages the employee already sent in this session. */
   initialUsed: number;
   /** The conversation is with the support team (the agent is muted). */
   initialWithSupport?: boolean;
+  /** The specific conversation being viewed, when loaded from history. */
+  conversationId?: number;
 }) {
   const [messages, setMessages] = useState(initialMessages);
   const [used, setUsed] = useState(initialUsed);
@@ -70,7 +73,7 @@ export function ChatView({
       const response = await fetch("/chat/stream", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(input),
+        body: JSON.stringify({ input, conversationId }),
       });
       if (!response.ok || !response.body) throw new Error(`HTTP ${response.status}`);
 
@@ -129,7 +132,7 @@ export function ChatView({
     if (!withSupport) return;
     const tick = async () => {
       try {
-        const poll = await pollConversation();
+        const poll = await pollConversation(conversationId);
         if (poll.status === "closed") {
           setWithSupport(false);
           setTyping(false);
@@ -151,7 +154,7 @@ export function ChatView({
     void tick();
     const timer = setInterval(tick, 4000);
     return () => clearInterval(timer);
-  }, [withSupport]);
+  }, [withSupport, conversationId]);
 
   const inspected = messages.find((m): m is AgentMessageView => m.role === "agent" && m.id === inspectedId) ?? null;
 
@@ -160,7 +163,7 @@ export function ChatView({
   /** Records the employee's rating of an answer. */
   async function rate(messageId: string, rating: FeedbackRating): Promise<void> {
     try {
-      await rateAnswerAction(Number(messageId.slice(1)), rating);
+      await rateAnswerAction(Number(messageId.slice(1)), rating, conversationId);
       setMessages((current) => current.map((m) => (m.role === "agent" && m.id === messageId ? { ...m, feedback: { rating } } : m)));
     } catch {
       // Nothing breaks if it fails: the buttons simply stay.

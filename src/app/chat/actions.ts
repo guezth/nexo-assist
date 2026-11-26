@@ -10,23 +10,25 @@ export type ConversationPoll =
   | { status: "closed" };
 
 /** What the employee's screen asks for while it waits on the support team: new messages, or that the conversation ended. */
-export async function pollConversation(): Promise<ConversationPoll> {
+export async function pollConversation(conversationId?: number): Promise<ConversationPoll> {
   const user = await getSession();
   if (!user || user.role !== "employee") throw new Error("Sessão inválida.");
 
-  const conversation = await (await getConversations()).findActive(user.id);
-  if (!conversation) return { status: "closed" };
+  const conversations = await getConversations();
+  const conversation = conversationId ? await conversations.findById(conversationId) : await conversations.findActive(user.id);
+  if (!conversation || conversation.employeeId !== user.id) return { status: "closed" };
   return { status: "open", mode: conversation.mode === "analyst" ? "analyst" : "agent", used: conversation.used, typing: conversation.typing, messages: conversation.messages };
 }
 
 /** Closes the active conversation so the employee can start a new session. */
 /** Rates an agent answer ("good" / "needs_improvement"). Only for the employee's own conversation. */
-export async function rateAnswerAction(messageId: number, rating: FeedbackRating): Promise<{ ok: true; rated: boolean }> {
+export async function rateAnswerAction(messageId: number, rating: FeedbackRating, conversationId?: number): Promise<{ ok: true; rated: boolean }> {
   const user = await getSession();
   if (!user || user.role !== "employee") throw new Error("Sessão inválida.");
-  const conversation = await (await getConversations()).findActive(user.id);
-  if (!conversation) return { ok: true, rated: false };
-  return { ok: true, rated: await (await getConversations()).rateMessage(conversation.id, messageId, rating) };
+  const conversations = await getConversations();
+  const conversation = conversationId ? await conversations.findById(conversationId) : await conversations.findActive(user.id);
+  if (!conversation || conversation.employeeId !== user.id) return { ok: true, rated: false };
+  return { ok: true, rated: await conversations.rateMessage(conversation.id, messageId, rating) };
 }
 
 export async function startNewConversation(): Promise<ConversationPoll> {

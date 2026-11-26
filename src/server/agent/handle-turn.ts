@@ -40,12 +40,15 @@ function shownText(input: TurnInput): string {
  * allowed to speak (the agent is silent while an analyst has the conversation),
  * what a confirmation does, and when a transfer is carried out.
  */
-export async function handleTurn(requester: Requester, input: TurnInput, deps: TurnDeps, send: (event: TurnEvent) => void): Promise<void> {
+export async function handleTurn(requester: Requester, input: TurnInput, deps: TurnDeps, send: (event: TurnEvent) => void, conversationId?: number): Promise<void> {
   const now = deps.now?.() ?? new Date();
   const text = shownText(input);
   if (!text) return void send({ type: "error", reason: "failed" });
 
-  const conversation = await deps.conversations.getOrCreateActive(requester.id);
+  const conversation = conversationId
+    ? await deps.conversations.findById(conversationId)
+    : await deps.conversations.getOrCreateActive(requester.id);
+  if (!conversation || conversation.employeeId !== requester.id) return void send({ type: "error", reason: "failed" });
   try {
     await deps.conversations.addUserMessage(conversation.id, text);
   } catch (error) {
