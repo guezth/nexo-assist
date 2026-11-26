@@ -3,6 +3,7 @@ import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { createClient, type Client } from "@libsql/client";
 import { seedDemoConversations } from "@/server/conversations/seed";
+import { seedUsers } from "@/server/users/seed";
 import { migrate } from "./migrate";
 
 const DEFAULT_URL = "file:./data/nexo.db";
@@ -14,6 +15,8 @@ export async function openDatabase(url: string): Promise<Client> {
   }
   const client = createClient({ url });
   await migrate(client);
+  // The example people (and their password) are needed to sign in at all, so this is not optional.
+  await seedUsers(client);
   // Demo conversations for the console; turn off with SEED_DEMO_CONVERSATIONS=false.
   if (process.env.SEED_DEMO_CONVERSATIONS !== "false") await seedDemoConversations(client);
   return client;

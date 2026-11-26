@@ -1,5 +1,6 @@
-import { analysts, employees } from "@/data/seed";
+import { can } from "@/domain/access";
 import { getSession } from "@/server/auth/session";
+import { loadDirectory } from "@/server/console/directory";
 import { getConversations } from "@/server/conversations";
 import { sortSummaries, toRow } from "@/server/console/views";
 
@@ -12,10 +13,7 @@ const UPDATE_EVERY_MS = 2500;
  */
 export async function GET() {
   const session = await getSession();
-  if (!session || session.role !== "analyst") return new Response(null, { status: 401 });
-  const analyst = analysts.find((a) => a.id === session.id);
-  if (!analyst) return new Response(null, { status: 401 });
-  const nameOf = (id: number) => analysts.find((a) => a.id === id)?.name ?? "analista";
+  if (!session || !can(session.accessLevel, "console")) return new Response(null, { status: 401 });
 
   const encoder = new TextEncoder();
   // Set when the browser closes the stream; without it the loop would keep polling the database forever.
@@ -31,8 +29,8 @@ export async function GET() {
         try {
           const now = new Date();
           const summaries = await (await getConversations()).listForConsole();
-          const person = (id: number) => employees.find((e) => e.id === id) ?? { id, name: `Funcionário ${id}`, department: "—" };
-          const rows = sortSummaries(summaries, analyst.id).map((s) => toRow(s, person(s.employeeId), now, analyst.id, nameOf));
+          const { person, analystName } = await loadDirectory();
+          const rows = sortSummaries(summaries, session.id).map((s) => toRow(s, person(s.employeeId), now, session.id, analystName));
           const hash = JSON.stringify(rows.map((r) => [r.id, r.unread, r.typing, r.time, r.tag.label]));
           if (hash !== lastHash) {
             lastHash = hash;

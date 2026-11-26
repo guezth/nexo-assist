@@ -4,6 +4,7 @@ import { ChatView } from "@/components/chat/chat-view";
 import styles from "@/components/chat/chat.module.css";
 import { EmployeeShell } from "@/components/employee-shell";
 import type { AgentMessageView } from "@/domain/chat";
+import { can } from "@/domain/access";
 import { getSession } from "@/server/auth/session";
 import { getConversations } from "@/server/conversations";
 
@@ -18,7 +19,7 @@ function OnlineStatus() {
 
 async function ChatScreen({ searchParams }: { searchParams: Promise<{ conversation?: string }> }) {
   const user = await getSession();
-  if (!user || user.role !== "employee") redirect("/login");
+  if (!user || !can(user.accessLevel, "chat")) redirect("/login");
 
   const params = await searchParams;
   const conversations = await getConversations();

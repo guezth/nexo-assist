@@ -1,39 +1,53 @@
-import { analysts, employees } from "@/data/seed";
-import type { User } from "@/domain/types";
+import type { AccessLevel, Role } from "@/domain/access";
 import { hashPassword, verifyPassword } from "@/lib/password";
+import type { UserRepository } from "@/server/users/repository";
 import { LoginThrottle } from "./login-throttle";
 
-export type SessionUser = Pick<User, "id" | "name" | "email" | "role">;
+/** Who is signed in. The access level comes from the database on every request, never from the cookie. */
+export interface SessionUser {
+  id: number;
+  name: string;
+  email: string;
+  role: Role;
+  accessLevel: AccessLevel;
+}
 
 export type AuthResult = { ok: true; user: SessionUser } | { ok: false; reason: "invalid" | "throttled" };
 
-const users: User[] = [...employees, ...analysts];
+/** What authentication needs from the user store. */
+export type UserDirectory = Pick<UserRepository, "findCredentialsByEmail" | "findById">;
 
 // Compared against when the e-mail is unknown, so response time does not reveal which e-mails exist.
 const DUMMY_HASH = hashPassword("not-a-real-password", "dummy-salt");
 
-export type UserProfile = SessionUser & { passwordChangedDaysAgo: number };
+const toSessionUser = ({ id, name, email, role, accessLevel }: SessionUser): SessionUser => ({ id, name, email, role, accessLevel });
 
-const toSessionUser = ({ id, name, email, role }: User): SessionUser => ({ id, name, email, role });
-
-export function findProfile(id: number): UserProfile | null {
-  const user = users.find((u) => u.id === id);
-  return user ? { ...toSessionUser(user), passwordChangedDaysAgo: user.passwordChangedDaysAgo } : null;
+export async function findUserById(users: UserDirectory, id: number): Promise<SessionUser | null> {
+  const user = await users.findById(id);
+  return user ? toSessionUser(user) : null;
 }
 
-export function findUserById(id: number): SessionUser | null {
-  const user = users.find((u) => u.id === id);
-  return user ? toSessionUser(user) : null;
+export type UserProfile = SessionUser & { passwordChangedAt: string };
+
+export async function findProfile(users: UserDirectory, id: number): Promise<UserProfile | null> {
+  const user = await users.findById(id);
+  return user ? { ...toSessionUser(user), passwordChangedAt: user.passwordChangedAt } : null;
 }
 
 const globalForThrottle = globalThis as unknown as { nexoLoginThrottle?: LoginThrottle };
 const throttle = (globalForThrottle.nexoLoginThrottle ??= new LoginThrottle());
 
-export function authenticate(email: string, password: string, limiter: LoginThrottle = throttle): AuthResult {
+/** Checks the e-mail and the password registered for that person (the hash stored in the database). */
+export async function authenticate(
+  users: UserDirectory,
+  email: string,
+  password: string,
+  limiter: LoginThrottle = throttle,
+): Promise<AuthResult> {
   const key = email.trim().toLowerCase();
   if (limiter.isBlocked(key)) return { ok: false, reason: "throttled" };
 
-  const user = users.find((u) => u.email.toLowerCase() === key);
+  const user = await users.findCredentialsByEmail(email);
   // Always run a hash comparison, even for unknown e-mails.
   const passwordOk = verifyPassword(password, user?.passwordHash ?? DUMMY_HASH);
 

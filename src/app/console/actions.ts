@@ -1,6 +1,6 @@
 "use server";
 
-import { analysts } from "@/data/seed";
+import { can, canTakeOver, supportTierOf, type AccessLevel, type Capability } from "@/domain/access";
 import { withRetry } from "@/lib/retry";
 import { getSession } from "@/server/auth/session";
 import { ConversationStateError, getConversations, type Analyst } from "@/server/conversations";
@@ -12,16 +12,18 @@ export type ConsoleActionResult = { ok: true; warning?: string } | { ok: false; 
 
 const MAX_TEXT_LENGTH = 2000;
 
-/** The analyst always comes from the session, never from the request. */
-async function requireAnalyst(): Promise<Analyst> {
+/**
+ * The analyst always comes from the session, never from the request, and must
+ * hold the capability the action needs (checked against the access level stored in the database).
+ */
+async function requireSupport(capability: Capability): Promise<{ analyst: Analyst; accessLevel: AccessLevel }> {
   const user = await getSession();
-  if (!user || user.role !== "analyst") throw new Error("Sessão inválida.");
-  const analyst = analysts.find((a) => a.id === user.id);
-  if (!analyst) throw new Error("Sessão inválida.");
-  return { id: analyst.id, name: analyst.name, level: analyst.level };
+  if (!user || !can(user.accessLevel, capability)) throw new Error("Sessão inválida.");
+  return { analyst: { id: user.id, name: user.name, level: supportTierOf(user.accessLevel) ?? "N1" }, accessLevel: user.accessLevel };
 }
 
-const REFUSALS: Record<ConversationStateError["reason"], string> = {
+const REFUSALS: Record<ConversationStateError["reason"] | "critical_n2", string> = {
+  critical_n2: "Casos críticos são atendidos pelo Suporte N2.",
   not_found: "Conversa não encontrada.",
   closed: "Essa conversa já foi encerrada.",
   taken: "Outro analista já assumiu essa conversa.",
@@ -61,9 +63,12 @@ async function syncTicket(
 }
 
 export async function takeOverAction(conversationId: number): Promise<ConsoleActionResult> {
-  const analyst = await requireAnalyst();
+  const { analyst, accessLevel } = await requireSupport("conversation.takeover");
+  const conversations = await getConversations();
+  // Access level rule: a conversation handed over as critical can only be taken by Support N2.
+  const before = await conversations.findById(conversationId);
+  if (before && !canTakeOver(accessLevel, before.handoff?.reason ?? null)) return { ok: false, error: REFUSALS.critical_n2 };
   return run(async () => {
-    const conversations = await getConversations();
     await conversations.takeOver(conversationId, analyst);
     const conversation = await conversations.findById(conversationId);
     notify(conversation!.employeeId, { type: "takeover", payload: { conversationId } });
@@ -77,7 +82,7 @@ export async function takeOverAction(conversationId: number): Promise<ConsoleAct
 }
 
 export async function returnToAgentAction(conversationId: number): Promise<ConsoleActionResult> {
-  const analyst = await requireAnalyst();
+  const { analyst } = await requireSupport("conversation.return");
   return run(async () => {
     const conversations = await getConversations();
     await conversations.returnToAgent(conversationId, analyst);
@@ -92,7 +97,7 @@ export async function returnToAgentAction(conversationId: number): Promise<Conso
 }
 
 export async function closeConversationAction(conversationId: number): Promise<ConsoleActionResult> {
-  const analyst = await requireAnalyst();
+  const { analyst } = await requireSupport("conversation.close");
   return run(async () => {
     const conversations = await getConversations();
     await conversations.close(conversationId, analyst);
@@ -107,7 +112,7 @@ export async function closeConversationAction(conversationId: number): Promise<C
 }
 
 export async function sendAnalystMessageAction(conversationId: number, text: string): Promise<ConsoleActionResult> {
-  const analyst = await requireAnalyst();
+  const { analyst } = await requireSupport("conversation.reply");
   const clean = text.trim().slice(0, MAX_TEXT_LENGTH);
   if (!clean) return { ok: false, error: "Escreva uma mensagem." };
   return run(async () => {
@@ -123,7 +128,7 @@ export async function sendAnalystMessageAction(conversationId: number, text: str
 
 /** Marks the conversation as "analyst typing" while they write. */
 export async function setTypingAction(conversationId: number, typing: boolean): Promise<ConsoleActionResult> {
-  await requireAnalyst();
+  await requireSupport("conversation.reply");
   const conversations = await getConversations();
   await conversations.setTyping(conversationId, typing);
   const conversation = await conversations.findById(conversationId);
@@ -135,6 +140,6 @@ export async function setTypingAction(conversationId: number, typing: boolean): 
 
 /** The console is open: the analyst counts as online. */
 export async function heartbeatAction(): Promise<void> {
-  const analyst = await requireAnalyst();
+  const { analyst } = await requireSupport("console");
   await (await getPresence()).touch(analyst.id);
 }

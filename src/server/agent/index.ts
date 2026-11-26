@@ -1,7 +1,7 @@
 import "server-only";
-import { employees } from "@/data/seed";
 import { getConversations } from "@/server/conversations";
 import { getPersistentServices } from "@/server/services";
+import { getUsers } from "@/server/users";
 import type { Requester } from "./context";
 import type { TurnDeps } from "./handle-turn";
 import { createModels, type AgentModels } from "./models";
@@ -17,9 +17,9 @@ export async function getTurnDeps(): Promise<TurnDeps> {
 }
 
 /** The requester comes from the signed session; department and system are looked up, never taken from the request. */
-export function requesterFor(userId: number): Requester | null {
-  const employee = employees.find((e) => e.id === userId);
-  return employee
-    ? { id: employee.id, name: employee.name, department: employee.department, operatingSystem: employee.operatingSystem }
+export async function requesterFor(userId: number): Promise<Requester | null> {
+  const person = await (await getUsers()).findById(userId);
+  return person && person.role === "employee"
+    ? { id: person.id, name: person.name, department: person.department ?? "—", operatingSystem: person.operatingSystem ?? "não informado" }
     : null;
 }

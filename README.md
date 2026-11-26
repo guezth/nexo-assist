@@ -30,7 +30,7 @@ O `.env.example` já traz o endereço do Ollama, os dois modelos e as demais var
 
 ### Usuários de exemplo
 
-A senha de todos é `nexo123`.
+A senha de todos é a cadastrada, `nexo123`: ela fica **no banco**, guardada como hash (scrypt, com sal próprio por pessoa), e é o que o login confere. Qualquer outra senha é recusada.
 
 | Papel | E-mail | Observação |
 | --- | --- | --- |
@@ -39,10 +39,22 @@ A senha de todos é `nexo123`.
 | Funcionário | `bruno.tavares@nexo.com.br` | Windows 10; chamado de VPN aberto (serve para testar privacidade) e conversa na fila |
 | Funcionário | `fabio.nunes@nexo.com.br` | Chamado resolvido há 8 dias (não dá para reabrir) |
 | Outros | `diego.ramos@`, `elisa.prado@`, `gabriela.rocha@` `nexo.com.br` | |
-| Analista | `rafael.lima@nexo.com.br` | Suporte N2, entra no console |
-| Analista | `juliana.costa@nexo.com.br` | Suporte N1 |
+| Analista N2 | `rafael.lima@nexo.com.br` | Suporte N2: atende todos os casos, inclusive os críticos |
+| Analista N1 | `juliana.costa@nexo.com.br` | Suporte N1: não assume conversas transferidas como críticas |
 
 Ao abrir o banco pela primeira vez, o sistema cria 7 conversas de exemplo no console (3 na fila, 2 com o agent e 2 resolvidas). Ana, Carla e Bruno já começam transferidos para um analista, então o agent fica mudo para eles até alguém devolver ou encerrar a conversa. Para usar um deles com o agent, entre como Rafael, abra a conversa e clique em **Devolver ao agent** (ou **Encerrar atendimento**, que abre uma sessão nova). Fábio, Gabriela, Diego e Elisa já podem conversar com o agent.
+
+### Níveis de acesso
+
+Cada pessoa tem um nível de acesso cadastrado na tabela `users`, e o servidor o confere **em toda requisição** (o cookie só identifica a pessoa; o nível vem sempre do banco, então um cookie adulterado não sobe de nível). As permissões estão em `src/domain/access.ts`.
+
+| Nível | Área | O que pode |
+| --- | --- | --- |
+| Funcionário | `/chat`, `/historico`, `/perfil` | Conversar com o agent, ver o histórico e o perfil |
+| Suporte N1 | `/console` | Ver as conversas, assumir, responder, devolver ao agent e encerrar, **exceto** assumir as transferidas como críticas |
+| Suporte N2 | `/console` | Tudo do N1, mais assumir as conversas críticas |
+
+Funcionário não abre o console e analista não abre o chat: as páginas, as ações e os streams recusam.
 
 ### Roteiro para testar
 
@@ -106,7 +118,8 @@ src/server
   tickets/     repositório SQLite dos chamados e do histórico de cada um
   push/        notificações SSE para o funcionário (em memória, uma instância)
   conversations/  repositório SQLite das conversas (employee, agent e analista)
-  auth/        sessão assinada (HMAC), senha (scrypt), bloqueio por tentativas
+  auth/        sessão assinada (HMAC), conferência da senha cadastrada (scrypt), bloqueio por tentativas
+  users/       repositório da tabela de pessoas e o seed das pessoas de exemplo
   console/     monta o que o console desenha
 src/data/seed  funcionários, 9 artigos e 11 chamados em situações variadas
 ```
@@ -115,6 +128,7 @@ Pontos centrais:
 
 - **Separação de responsabilidades.** A tela só desenha *view models* já formatados (`src/domain/chat.ts`). O agent os produz. O sistema de chamados é uma interface (`TicketService`) com uma implementação simulada, então trocar pelo real não toca no agent.
 - **O agent fica dentro de um turno controlado** (`handle-turn.ts`). O turno é quem aplica o limite de mensagens, decide se o agent pode falar, executa confirmações e realiza transferências. O modelo não tem como pular essas regras.
+- **Pessoas e acesso.** A tabela `users` guarda nome, e-mail, nível de acesso, departamento, sistema operacional e o hash da senha. O seed cria as 9 pessoas de exemplo na primeira vez que o banco abre. As permissões vêm de `can(nível, capacidade)` em `src/domain/access.ts`, usada por páginas, ações e rotas.
 - **Persistência.** SQLite (`@libsql/client`), com migrações por `PRAGMA user_version`. Guarda as mensagens já no formato que a tela desenha, o modo da conversa (agent, analista ou encerrada), quem assumiu, o motivo e o resumo da transferência.
 - **Analistas online.** O console avisa o servidor a cada 15 s que está aberto; quem passou de 40 s sem avisar (ou saiu pelo botão Sair) deixa de contar. A tela de login mostra esse número real e o atualiza sozinha.
 - **Tempo real.** O funcionário recebe o turno do agent em streaming; enquanto espera um analista, a tela usa SSE (`/chat/events`) com fallback de polling. O console usa SSE (`/console/events`) para atualizações em tempo real. Indicador de "digitando" nos dois lados.
@@ -167,7 +181,7 @@ A ideia central: **o modelo propõe, o código dispõe**. O que não pode errar 
 | Falha do modelo | Se o principal falha, o leve assume; se os dois falham, a conversa é transferida para um analista, com aviso claro (timeout de 90 s por modelo) |
 | Conversa encerrada | Somente leitura: o servidor recusa mensagens nela, mesmo vinda do histórico |
 
-**Testes (113, `npm test`).** Os que mais importam não dependem de modelo: injeto um agent falso e verifico as regras em volta dele.
+**Testes (120, `npm test`).** Os que mais importam não dependem de modelo: injeto um agent falso e verifico as regras em volta dele.
 
 - Privacidade (consulta, listagem, atualização e reabertura de chamado alheio).
 - Confirmação (nada é criado sem clique; confirmar duas vezes não duplica; cancelar não toca no sistema).

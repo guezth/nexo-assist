@@ -2,6 +2,7 @@ import { History } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { EmployeeShell } from "@/components/employee-shell";
+import { can } from "@/domain/access";
 import { getSession } from "@/server/auth/session";
 import { listHistory } from "./actions";
 import styles from "./historico.module.css";
@@ -16,7 +17,7 @@ function formatDate(iso: string) {
 
 export default async function HistoricoPage() {
   const user = await getSession();
-  if (!user || user.role !== "employee") redirect("/login");
+  if (!user || !can(user.accessLevel, "history")) redirect("/login");
 
   const items = await listHistory();
 

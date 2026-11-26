@@ -123,6 +123,21 @@ const MIGRATIONS: string[][] = [
      )`,
     `CREATE INDEX ticket_history_by_ticket ON ticket_history (ticket_id, id)`,
   ],
+  [
+    // People and their credentials. The access level decides which area (and which actions) a person has.
+    `CREATE TABLE users (
+       id INTEGER PRIMARY KEY,
+       name TEXT NOT NULL,
+       email TEXT NOT NULL UNIQUE COLLATE NOCASE,
+       access_level TEXT NOT NULL CHECK (access_level IN ('employee', 'support_n1', 'support_n2')),
+       department TEXT,
+       operating_system TEXT,
+       -- scrypt: "salt:hash"
+       password_hash TEXT NOT NULL,
+       password_changed_at TEXT NOT NULL,
+       created_at TEXT NOT NULL
+     )`,
+  ],
 ];
 
 export async function migrate(client: Client): Promise<void> {

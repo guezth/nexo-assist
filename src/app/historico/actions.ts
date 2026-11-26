@@ -1,5 +1,6 @@
 "use server";
 
+import { can } from "@/domain/access";
 import { getSession } from "@/server/auth/session";
 import { getConversations } from "@/server/conversations";
 
@@ -14,7 +15,7 @@ export interface HistoryItem {
 
 export async function listHistory(): Promise<HistoryItem[]> {
   const user = await getSession();
-  if (!user || user.role !== "employee") throw new Error("Sessão inválida.");
+  if (!user || !can(user.accessLevel, "history")) throw new Error("Sessão inválida.");
 
   const summaries = await (await getConversations()).listByEmployee(user.id);
   return summaries.map((s) => ({

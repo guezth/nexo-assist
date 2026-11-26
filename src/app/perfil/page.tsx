@@ -5,17 +5,19 @@ import { EmployeeShell } from "@/components/employee-shell";
 import { formatElapsed } from "@/lib/format";
 import { getSession } from "@/server/auth/session";
 import { findProfile } from "@/server/auth/users";
+import { getUsers } from "@/server/users";
+import { can } from "@/domain/access";
 import styles from "./perfil.module.css";
 import { PasswordCard } from "./reset-password";
 
 async function ProfileScreen() {
   const session = await getSession();
-  if (!session || session.role !== "employee") redirect("/login");
-  const profile = findProfile(session.id);
+  if (!session || !can(session.accessLevel, "profile")) redirect("/login");
+  const profile = await findProfile(await getUsers(), session.id);
   if (!profile) redirect("/login");
 
   const now = new Date();
-  const changedAt = new Date(now.getTime() - profile.passwordChangedDaysAgo * 86_400_000);
+  const changedAt = new Date(profile.passwordChangedAt);
 
   return (
     <EmployeeShell user={session} active="profile" title="Meu perfil">

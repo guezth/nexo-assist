@@ -1,7 +1,12 @@
-import { describe, expect, it } from "vitest";
+import { createClient, type Client } from "@libsql/client";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { hashPassword } from "@/lib/password";
+import { migrate } from "@/server/db/migrate";
+import { UserRepository } from "@/server/users/repository";
+import { seedUsers } from "@/server/users/seed";
 import { LoginThrottle } from "./login-throttle";
 import { createSessionToken, homePathFor, verifySessionToken } from "./session-token";
-import { authenticate } from "./users";
+import { authenticate, findProfile, findUserById } from "./users";
 
 const SECRET = "a-test-secret-with-at-least-32-characters!!";
 const now = new Date("2026-10-21T12:00:00Z");
@@ -40,36 +45,105 @@ describe("session token", () => {
   });
 });
 
-describe("authenticate", () => {
-  it("accepts a seed employee, ignoring e-mail case and spaces", () => {
-    const result = authenticate("  Ana.Souza@NEXO.com.br ", "nexo123", new LoginThrottle());
-    expect(result).toMatchObject({ ok: true, user: { id: 1, role: "employee" } });
+describe("authenticate (against the users table)", () => {
+  let db: Client;
+  let users: UserRepository;
+
+  beforeEach(async () => {
+    db = createClient({ url: ":memory:" });
+    await migrate(db);
+    await seedUsers(db, now);
+    users = new UserRepository(db);
+  });
+  afterEach(() => db.close());
+
+  it("accepts a seed employee with the registered password, ignoring e-mail case and spaces", async () => {
+    const result = await authenticate(users, "  Ana.Souza@NEXO.com.br ", "nexo123", new LoginThrottle());
+    expect(result).toMatchObject({ ok: true, user: { id: 1, role: "employee", accessLevel: "employee" } });
   });
 
-  it("accepts an analyst", () => {
-    expect(authenticate("rafael.lima@nexo.com.br", "nexo123", new LoginThrottle())).toMatchObject({
+  it("gives each analyst the access level registered for them", async () => {
+    expect(await authenticate(users, "rafael.lima@nexo.com.br", "nexo123", new LoginThrottle())).toMatchObject({
       ok: true,
-      user: { role: "analyst" },
+      user: { role: "analyst", accessLevel: "support_n2" },
+    });
+    expect(await authenticate(users, "juliana.costa@nexo.com.br", "nexo123", new LoginThrottle())).toMatchObject({
+      ok: true,
+      user: { role: "analyst", accessLevel: "support_n1" },
     });
   });
 
-  it("never returns the password hash", () => {
-    const result = authenticate("ana.souza@nexo.com.br", "nexo123", new LoginThrottle());
+  it("does not accept any other password", async () => {
+    for (const wrong of ["errada", "123456", "NEXO123", "nexo1234", " nexo123"]) {
+      expect(await authenticate(users, "ana.souza@nexo.com.br", wrong, new LoginThrottle())).toEqual({ ok: false, reason: "invalid" });
+    }
+  });
+
+  it("checks the password that is in the database: after a change, the old one stops working", async () => {
+    await users.updatePassword(1, hashPassword("nova-senha-forte"), now);
+    expect(await authenticate(users, "ana.souza@nexo.com.br", "nexo123", new LoginThrottle())).toEqual({ ok: false, reason: "invalid" });
+    expect(await authenticate(users, "ana.souza@nexo.com.br", "nova-senha-forte", new LoginThrottle())).toMatchObject({ ok: true });
+    expect((await findProfile(users, 1))?.passwordChangedAt).toBe(now.toISOString());
+  });
+
+  it("stores only hashes, and never returns them", async () => {
+    const rows = await db.execute("SELECT password_hash FROM users");
+    expect(rows.rows).toHaveLength(9);
+    for (const row of rows.rows) {
+      expect(String(row.password_hash)).not.toContain("nexo123");
+      expect(String(row.password_hash)).toMatch(/^[0-9a-f]+:[0-9a-f]+$/);
+    }
+    // each person has a salt of their own
+    expect(new Set(rows.rows.map((r) => String(r.password_hash).split(":")[0])).size).toBe(9);
+
+    const result = await authenticate(users, "ana.souza@nexo.com.br", "nexo123", new LoginThrottle());
     expect(JSON.stringify(result)).not.toContain("passwordHash");
+    expect(JSON.stringify(await findUserById(users, 1))).not.toContain("passwordHash");
+    expect(JSON.stringify(await users.listAll())).not.toContain("password_hash");
   });
 
-  it("gives the same answer for a wrong password and an unknown e-mail", () => {
+  it("gives the same answer for a wrong password and an unknown e-mail", async () => {
     const limiter = new LoginThrottle();
-    expect(authenticate("ana.souza@nexo.com.br", "errada", limiter)).toEqual({ ok: false, reason: "invalid" });
-    expect(authenticate("ninguem@nexo.com.br", "nexo123", limiter)).toEqual({ ok: false, reason: "invalid" });
+    expect(await authenticate(users, "ana.souza@nexo.com.br", "errada", limiter)).toEqual({ ok: false, reason: "invalid" });
+    expect(await authenticate(users, "ninguem@nexo.com.br", "nexo123", limiter)).toEqual({ ok: false, reason: "invalid" });
   });
 
-  it("blocks after 5 failures, even with the right password, and recovers after the window", () => {
+  it("blocks after 5 failures, even with the right password, and recovers after the window", async () => {
     let t = 0;
     const limiter = new LoginThrottle(() => t);
-    for (let i = 0; i < 5; i++) authenticate("ana.souza@nexo.com.br", "errada", limiter);
-    expect(authenticate("ana.souza@nexo.com.br", "nexo123", limiter)).toEqual({ ok: false, reason: "throttled" });
+    for (let i = 0; i < 5; i++) await authenticate(users, "ana.souza@nexo.com.br", "errada", limiter);
+    expect(await authenticate(users, "ana.souza@nexo.com.br", "nexo123", limiter)).toEqual({ ok: false, reason: "throttled" });
     t += 5 * 60 * 1000 + 1;
-    expect(authenticate("ana.souza@nexo.com.br", "nexo123", limiter).ok).toBe(true);
+    expect((await authenticate(users, "ana.souza@nexo.com.br", "nexo123", limiter)).ok).toBe(true);
+  });
+});
+
+describe("user table", () => {
+  it("is seeded once, with ids that match the conversations and tickets, and the profile data", async () => {
+    const db = createClient({ url: ":memory:" });
+    await migrate(db);
+    expect(await seedUsers(db, now)).toBe(true);
+    expect(await seedUsers(db, now)).toBe(false);
+
+    const users = new UserRepository(db);
+    const all = await users.listAll();
+    expect(all.map((u) => [u.id, u.accessLevel])).toEqual([
+      [1, "employee"], [2, "employee"], [3, "employee"], [4, "employee"], [5, "employee"], [6, "employee"], [7, "employee"],
+      [8, "support_n2"], [9, "support_n1"],
+    ]);
+    expect(all[0]).toMatchObject({ name: "Ana Souza", department: "Financeiro", operatingSystem: "Windows 11" });
+    // Ana's password is 42 days old, as the profile shows
+    expect(Math.round((now.getTime() - new Date(all[0].passwordChangedAt).getTime()) / 86_400_000)).toBe(42);
+    db.close();
+  });
+
+  it("does not allow two people with the same e-mail, whatever the case", async () => {
+    const db = createClient({ url: ":memory:" });
+    await migrate(db);
+    await seedUsers(db, now);
+    await expect(
+      new UserRepository(db).create({ id: 99, name: "x", email: "ANA.SOUZA@nexo.com.br", accessLevel: "employee", passwordHash: "a:b", passwordChangedAt: now.toISOString() }),
+    ).rejects.toThrow();
+    db.close();
   });
 });

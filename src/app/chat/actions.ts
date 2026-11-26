@@ -2,6 +2,7 @@
 
 import type { ChatMessageView } from "@/domain/chat";
 import type { FeedbackRating } from "@/domain/feedback";
+import { can } from "@/domain/access";
 import { getSession } from "@/server/auth/session";
 import { getConversations } from "@/server/conversations";
 
@@ -12,7 +13,7 @@ export type ConversationPoll =
 /** What the employee's screen asks for while it waits on the support team: new messages, or that the conversation ended. */
 export async function pollConversation(conversationId?: number): Promise<ConversationPoll> {
   const user = await getSession();
-  if (!user || user.role !== "employee") throw new Error("Sessão inválida.");
+  if (!user || !can(user.accessLevel, "chat")) throw new Error("Sessão inválida.");
 
   const conversations = await getConversations();
   const conversation = conversationId ? await conversations.findById(conversationId) : await conversations.findActive(user.id);
@@ -24,7 +25,7 @@ export async function pollConversation(conversationId?: number): Promise<Convers
 /** Rates an agent answer ("good" / "needs_improvement"). Only for the employee's own conversation. */
 export async function rateAnswerAction(messageId: number, rating: FeedbackRating, conversationId?: number): Promise<{ ok: true; rated: boolean }> {
   const user = await getSession();
-  if (!user || user.role !== "employee") throw new Error("Sessão inválida.");
+  if (!user || !can(user.accessLevel, "chat")) throw new Error("Sessão inválida.");
   const conversations = await getConversations();
   const conversation = conversationId ? await conversations.findById(conversationId) : await conversations.findActive(user.id);
   if (!conversation || conversation.employeeId !== user.id) return { ok: true, rated: false };
@@ -33,7 +34,7 @@ export async function rateAnswerAction(messageId: number, rating: FeedbackRating
 
 export async function startNewConversation(): Promise<ConversationPoll> {
   const user = await getSession();
-  if (!user || user.role !== "employee") throw new Error("Sessão inválida.");
+  if (!user || !can(user.accessLevel, "chat")) throw new Error("Sessão inválida.");
 
   const conversations = await getConversations();
   const active = await conversations.findActive(user.id);

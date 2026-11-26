@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { TurnEvent } from "@/domain/chat";
+import { can } from "@/domain/access";
 import { getSession } from "@/server/auth/session";
 import { getTurnDeps, handleTurn, requesterFor } from "@/server/agent";
 
@@ -19,7 +20,7 @@ const bodySchema = z.object({ input: inputSchema, conversationId: z.number().opt
  */
 export async function POST(request: Request) {
   const session = await getSession();
-  const requester = session?.role === "employee" ? requesterFor(session.id) : null;
+  const requester = session && can(session.accessLevel, "chat") ? await requesterFor(session.id) : null;
   if (!requester) return new Response("Sessão inválida.", { status: 401 });
 
   const parsed = bodySchema.safeParse(await request.json().catch(() => null));

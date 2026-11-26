@@ -1,3 +1,4 @@
+import { can } from "@/domain/access";
 import { getSession } from "@/server/auth/session";
 import { subscribe } from "@/server/push";
 
@@ -7,7 +8,7 @@ import { subscribe } from "@/server/push";
  */
 export async function GET() {
   const session = await getSession();
-  if (!session || session.role !== "employee") return new Response(null, { status: 401 });
+  if (!session || !can(session.accessLevel, "chat")) return new Response(null, { status: 401 });
 
   const body = subscribe(session.id);
 

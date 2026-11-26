@@ -1,10 +1,12 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { can } from "@/domain/access";
 import { createSession, destroySession, getSession } from "@/server/auth/session";
 import { getPresence } from "@/server/presence";
 import { homePathFor } from "@/server/auth/session-token";
 import { authenticate } from "@/server/auth/users";
+import { getUsers } from "@/server/users";
 
 export interface LoginState {
   error?: string;
@@ -18,7 +20,7 @@ export async function loginAction(_previous: LoginState, formData: FormData): Pr
 
   if (!email || !password) return { error: "Informe o e-mail e a senha.", email };
 
-  const result = authenticate(email, password);
+  const result = await authenticate(await getUsers(), email, password);
   if (!result.ok) {
     return {
       email,
@@ -36,7 +38,7 @@ export async function loginAction(_previous: LoginState, formData: FormData): Pr
 export async function logoutAction(): Promise<void> {
   // An analyst who signs out stops counting as online right away.
   const user = await getSession();
-  if (user?.role === "analyst") await (await getPresence()).leave(user.id);
+  if (user && can(user.accessLevel, "console")) await (await getPresence()).leave(user.id);
   await destroySession();
   redirect("/login");
 }

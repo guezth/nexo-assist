@@ -8,6 +8,7 @@ import {
   createSessionToken,
   verifySessionToken,
 } from "./session-token";
+import { getUsers } from "@/server/users";
 import { findUserById, type SessionUser } from "./users";
 
 function isSecureCookie(): boolean {
@@ -43,5 +44,6 @@ export async function getSession(): Promise<SessionUser | null> {
   await connection();
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
   const payload = verifySessionToken(token);
-  return payload ? findUserById(payload.uid) : null;
+  // The person (and their access level) is read from the database every time: a forged or old cookie cannot raise it.
+  return payload ? findUserById(await getUsers(), payload.uid) : null;
 }

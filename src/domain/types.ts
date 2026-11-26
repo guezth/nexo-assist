@@ -1,3 +1,5 @@
+import type { Role } from "./access";
+
 export type TicketType = "INC" | "REQ";
 
 export const TICKET_CATEGORIES = [
@@ -22,15 +24,13 @@ export type TicketStatus =
 
 export type AffectedScope = "self" | "team" | "company" | "unknown";
 
-export type Role = "employee" | "analyst";
+export type { Role } from "./access";
 
+/** A person of the system, as the domain sees them. Credentials live only in the database layer. */
 export interface User {
-  id: number; // internal auto-increment key
+  id: number; // internal key
   name: string;
   email: string;
-  passwordHash: string;
-  /** Demo data: how long ago the password was last changed. */
-  passwordChangedDaysAgo: number;
   role: Role;
 }
 
