@@ -5,7 +5,7 @@ import { withRetry } from "@/lib/retry";
 import { getSession } from "@/server/auth/session";
 import { ConversationStateError, getConversations, type Analyst } from "@/server/conversations";
 import { getPresence } from "@/server/presence";
-import { getServices } from "@/server/services";
+import { getPersistentServices } from "@/server/services";
 
 export type ConsoleActionResult = { ok: true; warning?: string } | { ok: false; error: string };
 
@@ -48,7 +48,7 @@ async function syncTicket(
   author: string,
 ): Promise<{ warning?: string }> {
   if (!ticketCode) return {};
-  const { tickets } = getServices();
+  const { tickets } = await getPersistentServices();
   try {
     const ticket = await withRetry(() => tickets.getByCode(employeeId, ticketCode), { retries: 2, baseDelayMs: 300 });
     const next = ticket ? change(ticket.status) : null;

@@ -1,7 +1,7 @@
 import "server-only";
 import { employees } from "@/data/seed";
 import { getConversations } from "@/server/conversations";
-import { getServices } from "@/server/services";
+import { getPersistentServices } from "@/server/services";
 import type { Requester } from "./context";
 import type { TurnDeps } from "./handle-turn";
 import { createModels, type AgentModels } from "./models";
@@ -12,7 +12,7 @@ const globalForModels = globalThis as unknown as { nexoModels?: AgentModels };
 
 export async function getTurnDeps(): Promise<TurnDeps> {
   globalForModels.nexoModels ??= createModels();
-  const { tickets, knowledgeBase } = getServices();
+  const { tickets, knowledgeBase } = await getPersistentServices();
   return { conversations: await getConversations(), tickets, knowledgeBase, models: globalForModels.nexoModels };
 }
 

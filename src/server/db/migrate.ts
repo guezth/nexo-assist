@@ -94,6 +94,35 @@ const MIGRATIONS: string[][] = [
     // Indicador de "digitando": flag da conversa atualizada quando o analista digita/envia.
     `ALTER TABLE conversations ADD COLUMN typing INTEGER NOT NULL DEFAULT 0`,
   ],
+  [
+    // Tickets persistentes: substituem o MockTicketService em memória.
+    `CREATE TABLE tickets (
+       id INTEGER PRIMARY KEY AUTOINCREMENT,
+       code TEXT NOT NULL UNIQUE,
+       type TEXT NOT NULL CHECK (type IN ('INC', 'REQ')),
+       title TEXT NOT NULL,
+       description TEXT NOT NULL,
+       category TEXT NOT NULL,
+       subcategory TEXT,
+       priority TEXT NOT NULL CHECK (priority IN ('critical', 'high', 'medium', 'low')),
+       status TEXT NOT NULL CHECK (status IN ('open', 'in_progress', 'waiting_analyst', 'in_attendance', 'approved', 'resolved')),
+       affected TEXT NOT NULL CHECK (affected IN ('self', 'team', 'company', 'unknown')),
+       requester_id INTEGER NOT NULL,
+       created_at TEXT NOT NULL,
+       updated_at TEXT NOT NULL,
+       resolved_at TEXT
+     )`,
+    `CREATE INDEX tickets_by_requester ON tickets (requester_id, status)`,
+    `CREATE INDEX tickets_by_code ON tickets (code)`,
+    `CREATE TABLE ticket_history (
+       id INTEGER PRIMARY KEY AUTOINCREMENT,
+       ticket_id INTEGER NOT NULL REFERENCES tickets (id) ON DELETE CASCADE,
+       at TEXT NOT NULL,
+       author TEXT NOT NULL,
+       text TEXT NOT NULL
+     )`,
+    `CREATE INDEX ticket_history_by_ticket ON ticket_history (ticket_id, id)`,
+  ],
 ];
 
 export async function migrate(client: Client): Promise<void> {
