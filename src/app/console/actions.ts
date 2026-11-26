@@ -6,6 +6,7 @@ import { getSession } from "@/server/auth/session";
 import { ConversationStateError, getConversations, type Analyst } from "@/server/conversations";
 import { getPresence } from "@/server/presence";
 import { getPersistentServices } from "@/server/services";
+import { notify } from "@/server/push";
 
 export type ConsoleActionResult = { ok: true; warning?: string } | { ok: false; error: string };
 
@@ -65,6 +66,7 @@ export async function takeOverAction(conversationId: number): Promise<ConsoleAct
     const conversations = await getConversations();
     await conversations.takeOver(conversationId, analyst);
     const conversation = await conversations.findById(conversationId);
+    notify(conversation!.employeeId, { type: "takeover", payload: { conversationId } });
     return syncTicket(
       conversation!.employeeId,
       conversation!.ticketCode,
@@ -112,13 +114,22 @@ export async function sendAnalystMessageAction(conversationId: number, text: str
     const conversations = await getConversations();
     await conversations.setTyping(conversationId, false);
     await conversations.addAnalystMessage(conversationId, analyst, clean);
+    const conversation = await conversations.findById(conversationId);
+    if (conversation) {
+      notify(conversation.employeeId, { type: "message", payload: { conversationId, text: clean, author: analyst.name } });
+    }
   });
 }
 
 /** Marks the conversation as "analyst typing" while they write. */
 export async function setTypingAction(conversationId: number, typing: boolean): Promise<ConsoleActionResult> {
   await requireAnalyst();
-  await (await getConversations()).setTyping(conversationId, typing);
+  const conversations = await getConversations();
+  await conversations.setTyping(conversationId, typing);
+  const conversation = await conversations.findById(conversationId);
+  if (conversation) {
+    notify(conversation.employeeId, { type: "typing", payload: { conversationId, typing } });
+  }
   return { ok: true };
 }
 

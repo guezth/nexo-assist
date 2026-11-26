@@ -127,11 +127,15 @@ export function ChatView({
     }
   }
 
-  // While the support team has the conversation, look for their answers.
+  // While the support team has the conversation, listen for real-time events.
   useEffect(() => {
     if (!withSupport) return;
-    const tick = async () => {
+
+    const source = new EventSource("/chat/events");
+    source.onmessage = async (event) => {
       try {
+        const push = JSON.parse(event.data) as { type: string; payload?: { conversationId?: number; typing?: boolean } };
+        if (push.payload?.conversationId && push.payload.conversationId !== conversationId) return;
         const poll = await pollConversation(conversationId);
         if (poll.status === "closed") {
           setWithSupport(false);
@@ -144,16 +148,38 @@ export function ChatView({
         } else {
           setWithSupport(poll.mode === "analyst");
           setTyping(poll.typing);
-          // Keep the greeting, which is not part of the stored conversation.
           setMessages((current) => [...current.filter((m) => m.id === "greeting"), ...poll.messages]);
         }
       } catch {
-        // Try again on the next tick.
+        // Keep calm; the next event or the fallback timer will retry.
       }
     };
-    void tick();
-    const timer = setInterval(tick, 4000);
-    return () => clearInterval(timer);
+
+    // Fallback: if SSE disconnects, poll every 5s until it reconnects.
+    const fallback = setInterval(async () => {
+      if (source.readyState === EventSource.CLOSED) {
+        try {
+          const poll = await pollConversation(conversationId);
+          if (poll.status === "closed") {
+            setWithSupport(false);
+            setTyping(false);
+            setUsed(0);
+            setMessages((current) => [...current, { id: "closed", role: "system", icon: "close", text: "Atendimento encerrado pela equipe de TI" }]);
+          } else {
+            setWithSupport(poll.mode === "analyst");
+            setTyping(poll.typing);
+            setMessages((current) => [...current.filter((m) => m.id === "greeting"), ...poll.messages]);
+          }
+        } catch {
+          // Try again on the next tick.
+        }
+      }
+    }, 5000);
+
+    return () => {
+      source.close();
+      clearInterval(fallback);
+    };
   }, [withSupport, conversationId]);
 
   const inspected = messages.find((m): m is AgentMessageView => m.role === "agent" && m.id === inspectedId) ?? null;
