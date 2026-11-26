@@ -102,7 +102,9 @@ src/domain     regras puras, sem I/O: SLA, prioridade, duplicidade, reabertura, 
                montagem da resposta (TurnAssembler) e os tipos que a tela desenha
 src/server
   agent/       Mastra: modelos, instruções, ferramentas, confirmação de rascunhos, orquestração do turno
-  services/    sistema de chamados simulado (com instabilidade) e central de ajuda (busca por palavras)
+  services/    sistema de chamados (SQLite, com latência e quedas simuladas) e central de ajuda (busca por palavras)
+  tickets/     repositório SQLite dos chamados e do histórico de cada um
+  push/        notificações SSE para o funcionário (em memória, uma instância)
   conversations/  repositório SQLite das conversas (employee, agent e analista)
   auth/        sessão assinada (HMAC), senha (scrypt), bloqueio por tentativas
   console/     monta o que o console desenha
@@ -162,14 +164,15 @@ A ideia central: **o modelo propõe, o código dispõe**. O que não pode errar 
 | Agent mudo com o analista | `handle-turn.ts` nem chama o modelo |
 | Limite de 30 mensagens | Contagem atômica no banco |
 | Sistema de chamados instável | 4 tentativas com espera crescente, cada uma visível como passo; se falhar, o rascunho continua aberto |
-| Falha do modelo | Mensagem clara, conversa continua, tempo máximo de 90 s |
+| Falha do modelo | Se o principal falha, o leve assume; se os dois falham, a conversa é transferida para um analista, com aviso claro (timeout de 90 s por modelo) |
+| Conversa encerrada | Somente leitura: o servidor recusa mensagens nela, mesmo vinda do histórico |
 
-**Testes (105, `npm test`).** Os que mais importam não dependem de modelo: injeto um agent falso e verifico as regras em volta dele.
+**Testes (113, `npm test`).** Os que mais importam não dependem de modelo: injeto um agent falso e verifico as regras em volta dele.
 
 - Privacidade (consulta, listagem, atualização e reabertura de chamado alheio).
 - Confirmação (nada é criado sem clique; confirmar duas vezes não duplica; cancelar não toca no sistema).
 - Crítico vai direto ao analista; sistema fora do ar mantém o rascunho; agent mudo; limite de 30, inclusive com requisições simultâneas.
-- Duplicidade e reabertura. SLA, prioridade, sessão e autenticação. Repositório de conversas, console e persistência após reabrir o arquivo.
+- Sistema de chamados persistente (privacidade, atualização, reabertura, status, sequência de códigos). Duplicidade e reabertura. SLA, prioridade, sessão e autenticação. Repositório de conversas, console e persistência após reabrir o arquivo.
 
 **Verificação com o modelo real.** Além dos testes, percorri os casos do roteiro acima no navegador, com o kimi e o gemma de verdade. Isso revelou problemas que os testes não pegariam, e cada um virou correção: o modelo repetia o texto depois dos botões, copiava as notas internas do histórico para as respostas e perguntava de novo quando a pessoa já tinha pedido um analista.
 

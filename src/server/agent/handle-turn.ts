@@ -6,7 +6,7 @@ import type { ConversationRepository } from "@/server/conversations/repository";
 import { MessageLimitError } from "@/server/conversations/repository";
 import type { KnowledgeBase } from "@/server/services/knowledge-base";
 import type { TicketService } from "@/server/services/ticket-service";
-import type { Requester, TurnContext } from "./context";
+import { callLegacy, type Requester, type TurnContext } from "./context";
 import { decideDraft } from "./drafts";
 import type { AgentModels } from "./models";
 import { buildHistory, runAgentTurn } from "./run-turn";
@@ -49,6 +49,8 @@ export async function handleTurn(requester: Requester, input: TurnInput, deps: T
     ? await deps.conversations.findById(conversationId)
     : await deps.conversations.getOrCreateActive(requester.id);
   if (!conversation || conversation.employeeId !== requester.id) return void send({ type: "error", reason: "failed" });
+  // An ended conversation is read-only (the history lets people open it): a new topic starts a new session.
+  if (conversation.mode === "closed") return void send({ type: "error", reason: "closed" });
   try {
     await deps.conversations.addUserMessage(conversation.id, text);
   } catch (error) {
@@ -100,6 +102,16 @@ export async function handleTurn(requester: Requester, input: TurnInput, deps: T
   } catch (error) {
     console.error("[agent] turn failed", error);
     return void send({ type: "error", reason: "unavailable" });
+  }
+
+  // The ticket the conversation was handed over for is marked "Aguardando analista" (only the requester's own ticket, never one named by the model alone).
+  const transfer = ctx.state.handoff;
+  if (transfer?.ticketCode) {
+    const code = transfer.ticketCode;
+    const own = await callLegacy(ctx, () => deps.tickets.getByCode(requester.id, code));
+    if (own.ok && own.value && own.value.status !== "resolved") {
+      await callLegacy(ctx, () => deps.tickets.setStatus(own.value!.code, "waiting_analyst", "Nexo Assist", "Transferido para um analista"));
+    }
   }
 
   const built = turn.build();

@@ -106,6 +106,8 @@ export function useChat({
         if (event.reason === "limit") {
           setUsed(MAX_SESSION_MESSAGES);
           setError("Você chegou ao limite de mensagens desta sessão.");
+        } else if (event.reason === "closed") {
+          setError("Esta conversa foi encerrada. Inicie um novo atendimento para continuar.");
         } else {
           setError(
             event.reason === "unavailable"

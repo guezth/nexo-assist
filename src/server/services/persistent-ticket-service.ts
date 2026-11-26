@@ -1,4 +1,4 @@
-import { canReopen } from "@/domain/rules";
+import { canReopen, isOpen } from "@/domain/rules";
 import type { Ticket, TicketStatus, TicketType } from "@/domain/types";
 import { TicketRepository } from "@/server/tickets/repository";
 import { ServiceUnavailableError, TicketRuleError } from "./errors";

@@ -151,4 +151,4 @@ export type TurnEvent =
   | { type: "block"; block: AgentBlock }
   | { type: "question"; question: string; options: OptionView[] }
   | { type: "done"; message: AgentMessageView | null; /** The conversation now waits on the support team. */ withSupport: boolean }
-  | { type: "error"; reason: "limit" | "unavailable" | "failed" };
+  | { type: "error"; reason: "limit" | "unavailable" | "failed" | "closed" };

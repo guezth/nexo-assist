@@ -18,10 +18,15 @@ export async function GET() {
   const nameOf = (id: number) => analysts.find((a) => a.id === id)?.name ?? "analista";
 
   const encoder = new TextEncoder();
+  // Set when the browser closes the stream; without it the loop would keep polling the database forever.
+  let closed = false;
   const body = new ReadableStream<Uint8Array>({
+    cancel() {
+      closed = true;
+    },
     async start(controller) {
       let lastHash = "";
-      for (;;) {
+      while (!closed) {
         await new Promise((resolve) => setTimeout(resolve, UPDATE_EVERY_MS));
         try {
           const now = new Date();

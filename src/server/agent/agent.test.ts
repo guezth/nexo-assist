@@ -225,6 +225,9 @@ describe("handleTurn", () => {
     const conversation = await conversations.findActive(1);
     expect(conversation).toMatchObject({ mode: "analyst", analystId: null, handoff: { reason: "critical" } });
     expect(conversation?.handoff?.respondBy).toBe("2025-10-21T16:00:00.000Z"); // 1 hour
+    // the ticket itself shows it is waiting for an analyst
+    const newest = (await service.listByRequester(1))[0];
+    expect(newest).toMatchObject({ code: conversation?.ticketCode, status: "waiting_analyst" });
   });
 
   it("keeps the draft open when the ticket system is down, and says so", async () => {
@@ -269,6 +272,18 @@ describe("handleTurn", () => {
     await handleTurn(requesterOf(1), { type: "text", text: "uma a mais" }, deps, send);
     expect(events).toEqual([{ type: "error", reason: "limit" }]);
     expect(runAgent).toHaveBeenCalledTimes(MAX_SESSION_MESSAGES);
+  });
+
+  it("does not accept messages in a conversation that was closed", async () => {
+    const runAgent = vi.fn(async () => {});
+    const conversation = await conversations.getOrCreateActive(1);
+    await conversations.closeForNewSession(conversation.id);
+
+    const { events, send } = collect();
+    await handleTurn(requesterOf(1), { type: "text", text: "ainda aí?" }, baseDeps({ runAgent }), send, conversation.id);
+
+    expect(events).toEqual([{ type: "error", reason: "closed" }]);
+    expect(runAgent).not.toHaveBeenCalled();
   });
 
   it("reports a model failure and keeps the conversation usable", async () => {
