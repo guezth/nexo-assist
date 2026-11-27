@@ -246,6 +246,16 @@ O projeto foi desenvolvido com o Claude Code, em passos pequenos acompanhados e 
 
 No produto, a IA aparece de dois modos: os modelos do Ollama (gemma4 e kimi-k2.6) que conversam com o funcionário, e o Mastra, que orquestra as ferramentas.
 
+## Diagnóstico: "o assistente está indisponível"
+
+Abra `/health` (por exemplo `http://localhost:3000/health`). Ele mostra se o banco abre e se o servidor Ollama responde **a partir de onde o app roda**:
+
+```json
+{ "status": "ok", "database": "ok", "ollama": "ok" }
+```
+
+Se `ollama` mostrar erro, as causas mais comuns são: `OLLAMA_BASE_URL` ausente (o padrão é `http://localhost:11434`, que não existe dentro de um container ou num servidor), IP de quem roda o app sem autorização no Ollama, ou porta bloqueada. Os detalhes de cada falha de modelo também aparecem no log (`[agent] modelo ... falhou`).
+
 ## Deploy com Docker e Portainer
 
 O repositório traz um `Dockerfile` (3 estágios, Node 22, usuário sem privilégios, healthcheck) e um `docker-compose.yml`.

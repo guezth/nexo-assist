@@ -270,9 +270,10 @@ export function AgentMessage({
       {message.blocks.map((block, index) => (
         <Block key={index} block={block} disabled={disabled} onAction={onAction} />
       ))}
-      {onRate && !message.feedback && (
+      {/* The greeting is part of the screen, not an answer: there is nothing to rate. */}
+      {onRate && !message.feedback && message.id !== "greeting" && !thinking && (
         <div className={styles.feedbackRow}>
-          <button type="button" className={styles.btnSecondary} disabled={disabled} onClick={() => onRate(message.id, "good")}>
+          <button type="button" className={`${styles.btn} ${styles.btnSecondary}`} disabled={disabled} onClick={() => onRate(message.id, "good")}>
             Ótimo
           </button>
           <button type="button" className={styles.btn} disabled={disabled} onClick={() => onRate(message.id, "needs_improvement")}>
