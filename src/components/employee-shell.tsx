@@ -47,7 +47,7 @@ export function EmployeeShell({
             Atendimento
           </Link>
           <Link
-            href="/chamados/novo"
+            href="/chamados"
             className={`${styles.navItem} ${active === "ticket" ? styles.navItemActive : ""}`}
             aria-current={active === "ticket" ? "page" : undefined}
           >

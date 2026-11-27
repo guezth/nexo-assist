@@ -1,0 +1,173 @@
+.container {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  font-size: 14px;
+  color: var(--ink-3);
+}
+
+.newButton {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.newButton:hover {
+  background: var(--cta-hover);
+}
+
+.empty {
+  text-align: center;
+  color: var(--ink-3);
+  font-size: 14px;
+  margin-top: 40px;
+}
+
+.emptyAction {
+  display: inline-block;
+  margin-top: 12px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.emptyAction:hover {
+  background: var(--cta-hover);
+}
+
+.list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.item {
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+.code {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--ink-1);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.badge {
+  flex: none;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+/* Priority badges */
+.priority_critical {
+  background: #ffebee;
+  color: #c62828;
+}
+
+.priority_high {
+  background: #fff3e0;
+  color: #ef6c00;
+}
+
+.priority_medium {
+  background: #e3f2fd;
+  color: #1565c0;
+}
+
+.priority_low {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+/* Status badges */
+.status_open {
+  background: #e3f2fd;
+  color: #1565c0;
+}
+
+.status_in_progress,
+.status_in_attendance {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+.status_waiting_analyst {
+  background: #fff3e0;
+  color: #ef6c00;
+}
+
+.status_approved {
+  background: #f3e5f5;
+  color: #6a1b9a;
+}
+
+.status_resolved {
+  background: #f2f2f2;
+  color: var(--ink-3);
+}
+
+.time {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+.title {
+  margin: 0 0 6px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink-1);
+  line-height: 1.4;
+}
+
+.meta {
+  display: flex;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+.category {
+  font-weight: 500;
+}
+
+.type {
+  font-weight: 500;
+}
