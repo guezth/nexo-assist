@@ -215,6 +215,7 @@ Pontos conhecidos:
 
 ## O que faria com mais tempo
 
+- **Gestão completa de chamados para analistas:** implementar a interface de gestão de tickets no console (editar status, adicionar notas, vincular conversas), permitindo que o analista gerencie o ciclo de vida do chamado sem sair do sistema.
 - **Latência do agent:** menos idas e voltas ao modelo (ferramentas que já devolvam o contexto), cache de consultas dentro do turno e teste de modelos mais rápidos para o passo de decisão.
 - **Busca semântica** na central de ajuda, com a relevância no painel.
 - **Feriados** no cálculo de prazo SLA.
