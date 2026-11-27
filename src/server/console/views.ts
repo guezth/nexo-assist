@@ -111,23 +111,23 @@ export function toRow(
 
 /** The queue first, then conversations held by the analyst, then the agent's, then closed; recent activity first inside each. */
 export function sortSummaries(summaries: ConversationSummary[], analystId: number): ConversationSummary[] {
-  const rank = (s: ConversationSummary) => {
-    const group = groupOf(s, analystId);
-    return group === "queue" ? 0 : group === "mine" ? 1 : group === "closed" ? 3 : 2;
-  };
   return [...summaries].sort((a, b) => {
-    // 1. Prioritize unread messages above everything else
+    // 1. Most recently updated always stays on top
+    if (a.updatedAt !== b.updatedAt) {
+      return b.updatedAt.localeCompare(a.updatedAt);
+    }
+
+    // 2. If updated at the same time, prioritize unread
     const unreadA = a.unread > 0 ? 0 : 1;
     const unreadB = b.unread > 0 ? 0 : 1;
     if (unreadA !== unreadB) return unreadA - unreadB;
 
-    // 2. Then prioritize by group rank
-    const rankA = rank(a);
-    const rankB = rank(b);
-    if (rankA !== rankB) return rankA - rankB;
-
-    // 3. Finally, most recently updated
-    return b.updatedAt.localeCompare(a.updatedAt);
+    // 3. Finally, prioritize by group rank
+    const rank = (s: ConversationSummary) => {
+      const group = groupOf(s, analystId);
+      return group === "queue" ? 0 : group === "mine" ? 1 : group === "closed" ? 3 : 2;
+    };
+    return rank(a) - rank(b);
   });
 }
 
