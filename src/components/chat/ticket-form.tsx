@@ -1,11 +1,12 @@
 "use client";
 
+import { X } from "lucide-react";
 import { useState } from "react";
 import { createTicketAction } from "@/app/chat/actions";
 import { TICKET_CATEGORIES, type AffectedScope, type Priority, type TicketCategory, type TicketType } from "@/domain/types";
 import styles from "./ticket-form.module.css";
 
-export function TicketForm({ onCreated }: { onCreated: (code: string) => void }) {
+export function TicketForm({ onCreated, onClose }: { onCreated: (code: string) => void; onClose?: () => void }) {
   const [type, setType] = useState<TicketType>("INC");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -34,7 +35,14 @@ export function TicketForm({ onCreated }: { onCreated: (code: string) => void })
   return (
     <form className={styles.form} onSubmit={submit}>
       <div className={styles.header}>
-        <span className={styles.title}>Novo chamado</span>
+        <div className={styles.headerRow}>
+          <span className={styles.title}>Novo chamado</span>
+          {onClose && (
+            <button type="button" className={styles.closeBtn} onClick={onClose} aria-label="Fechar formulário">
+              <X size={16} />
+            </button>
+          )}
+        </div>
         <span className={styles.hint}>Abra diretamente, sem esperar o agente.</span>
       </div>
 

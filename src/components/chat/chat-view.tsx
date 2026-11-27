@@ -118,6 +118,7 @@ export function ChatView({
             setTicketCreated(code);
             setTimeout(() => setTicketCreated(null), 5000);
           }}
+          onClose={onTicketFormClose}
         />
       )}
       {ticketCreated && (

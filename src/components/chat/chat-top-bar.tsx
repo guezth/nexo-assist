@@ -1,11 +1,10 @@
 "use client";
 
 import { ChevronDown, Plus } from "lucide-react";
-import Link from "next/link";
 import { useState } from "react";
 import styles from "./chat-top-bar.module.css";
 
-export function ChatTopBar({ onNewTicket }: { onNewTicket: () => void }) {
+export function ChatTopBar({ onNewConversation, onNewTicket }: { onNewConversation: () => void; onNewTicket: () => void }) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -27,9 +26,17 @@ export function ChatTopBar({ onNewTicket }: { onNewTicket: () => void }) {
             <div className={styles.backdrop} onClick={() => setOpen(false)} />
             <ul className={styles.menu} role="menu">
               <li role="none">
-                <Link href="/chat" className={styles.item} role="menuitem" onClick={() => setOpen(false)}>
+                <button
+                  type="button"
+                  className={styles.item}
+                  role="menuitem"
+                  onClick={() => {
+                    setOpen(false);
+                    onNewConversation();
+                  }}
+                >
                   Atendimento
-                </Link>
+                </button>
               </li>
               <li role="none">
                 <button

@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
-import { ChatScreenClient } from "@/components/chat/chat-screen";
+import { ChatHeaderActions } from "@/components/chat/chat-header-actions";
+import { ChatView } from "@/components/chat/chat-view";
 import { EmployeeShell } from "@/components/employee-shell";
 import type { AgentMessageView } from "@/domain/chat";
 import { can } from "@/domain/access";
@@ -31,8 +32,8 @@ async function ChatScreen({ searchParams }: { searchParams: Promise<{ conversati
   };
 
   return (
-    <EmployeeShell user={user} active="chat" title="Atendimento">
-      <ChatScreenClient
+    <EmployeeShell user={user} active="chat" title="Atendimento" topBarRight={<ChatHeaderActions />}>
+      <ChatView
         initialMessages={[greeting, ...(conversation?.messages ?? [])]}
         initialUsed={conversation?.used ?? 0}
         initialWithSupport={conversation?.mode === "analyst"}

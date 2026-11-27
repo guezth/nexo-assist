@@ -1,4 +1,4 @@
-import { ChevronRight, History, LogOut, MessageSquare, UserRound } from "lucide-react";
+import { ChevronRight, FilePlus, History, LogOut, MessageSquare, UserRound } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { logoutAction } from "@/app/login/actions";
@@ -18,7 +18,7 @@ export function EmployeeShell({
   children,
 }: {
   user: SessionUser;
-  active: "chat" | "history" | "profile";
+  active: "chat" | "history" | "profile" | "ticket";
   title: string;
   topBarRight?: ReactNode;
   children: ReactNode;
@@ -45,6 +45,14 @@ export function EmployeeShell({
           >
             <MessageSquare size={16} aria-hidden />
             Atendimento
+          </Link>
+          <Link
+            href="/chamados/novo"
+            className={`${styles.navItem} ${active === "ticket" ? styles.navItemActive : ""}`}
+            aria-current={active === "ticket" ? "page" : undefined}
+          >
+            <FilePlus size={16} aria-hidden />
+            Chamados
           </Link>
           <Link
             href="/historico"

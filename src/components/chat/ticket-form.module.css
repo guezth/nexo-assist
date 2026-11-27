@@ -16,6 +16,30 @@
   margin-bottom: 4px;
 }
 
+.headerRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.closeBtn {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink-3);
+  cursor: pointer;
+}
+
+.closeBtn:hover {
+  background: #1b24310f;
+  color: var(--ink-2);
+}
+
 .title {
   font-size: 15px;
   font-weight: 700;

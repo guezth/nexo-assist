@@ -532,6 +532,34 @@
   cursor: default;
 }
 
+.ticketButton {
+  height: 36px;
+  width: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink-3);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+
+.ticketButton:hover {
+  background: #1b24310f;
+  color: var(--accent);
+}
+
+.ticketCreatedBanner {
+  margin: 0 var(--gutter) 8px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: #e6f4ea;
+  color: #137333;
+  font-size: 13px;
+}
+
 .meta {
   display: flex;
   justify-content: flex-end;
