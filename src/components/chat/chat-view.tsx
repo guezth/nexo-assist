@@ -1,10 +1,11 @@
 "use client";
 
 import { ArrowUp, Loader2 } from "lucide-react";
-import { Fragment } from "react";
+import { Fragment, useState } from "react";
 import { MAX_SESSION_MESSAGES, type ChatMessageView } from "@/domain/chat";
 import styles from "./chat.module.css";
 import { AgentMessage, AnalystMessage, SystemLine, UserMessage } from "./message-blocks";
+import { TicketForm } from "./ticket-form";
 import { TransparencyPanel } from "./transparency-panel";
 import { useChat } from "./use-chat";
 
@@ -13,11 +14,15 @@ export function ChatView({
   initialUsed,
   initialWithSupport = false,
   conversationId,
+  showTicketForm = false,
+  onTicketFormClose,
 }: {
   initialMessages: ChatMessageView[];
   initialUsed: number;
   initialWithSupport?: boolean;
   conversationId?: number;
+  showTicketForm?: boolean;
+  onTicketFormClose?: () => void;
 }) {
   const {
     messages,
@@ -43,6 +48,8 @@ export function ChatView({
     initialWithSupport,
     conversationId,
   });
+
+  const [ticketCreated, setTicketCreated] = useState<string | null>(null);
 
   return (
     <div className={styles.chat}>
@@ -103,6 +110,21 @@ export function ChatView({
       </div>
 
       {inspected && <TransparencyPanel message={inspected} onClose={() => setInspectedId(null)} />}
+
+      {showTicketForm && (
+        <TicketForm
+          onCreated={(code) => {
+            onTicketFormClose?.();
+            setTicketCreated(code);
+            setTimeout(() => setTicketCreated(null), 5000);
+          }}
+        />
+      )}
+      {ticketCreated && (
+        <div className={styles.ticketCreatedBanner} role="alert">
+          ✅ Chamado <strong>{ticketCreated}</strong> aberto com sucesso.
+        </div>
+      )}
 
       <form className={styles.composerArea} onSubmit={onSubmit}>
         <div className={styles.composer}>

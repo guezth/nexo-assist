@@ -2,9 +2,11 @@
 
 import type { ChatMessageView } from "@/domain/chat";
 import type { FeedbackRating } from "@/domain/feedback";
+import type { AffectedScope, Priority, TicketCategory, TicketType } from "@/domain/types";
 import { can } from "@/domain/access";
 import { getSession } from "@/server/auth/session";
 import { getConversations } from "@/server/conversations";
+import { getPersistentServices } from "@/server/services";
 
 export type ConversationPoll =
   | { status: "open"; mode: "agent" | "analyst"; used: number; typing: boolean; messages: ChatMessageView[] }
@@ -40,4 +42,40 @@ export async function startNewConversation(): Promise<ConversationPoll> {
   const active = await conversations.findActive(user.id);
   if (active) await conversations.closeForNewSession(active.id);
   return pollConversation();
+}
+
+export type CreateTicketResult =
+  | { ok: true; code: string }
+  | { ok: false; error: string };
+
+/** Opens a ticket directly from the employee's chat, bypassing the agent. */
+export async function createTicketAction(
+  type: TicketType,
+  title: string,
+  description: string,
+  category: TicketCategory,
+  priority: Priority,
+  affected: AffectedScope,
+): Promise<CreateTicketResult> {
+  const user = await getSession();
+  if (!user || !can(user.accessLevel, "chat")) throw new Error("Sessão inválida.");
+
+  const cleanTitle = title.trim().slice(0, 200);
+  const cleanDescription = description.trim().slice(0, 2000);
+  if (!cleanTitle || !cleanDescription) return { ok: false, error: "Preencha o título e a descrição." };
+
+  try {
+    const { tickets } = await getPersistentServices();
+    const ticket = await tickets.create(user.id, {
+      type,
+      title: cleanTitle,
+      description: cleanDescription,
+      category,
+      priority,
+      affected,
+    });
+    return { ok: true, code: ticket.code };
+  } catch {
+    return { ok: false, error: "Não foi possível abrir o chamado agora. Tente de novo em instantes." };
+  }
 }

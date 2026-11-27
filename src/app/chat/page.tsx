@@ -1,21 +1,11 @@
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
-import { ChatView } from "@/components/chat/chat-view";
-import styles from "@/components/chat/chat.module.css";
+import { ChatScreenClient } from "@/components/chat/chat-screen";
 import { EmployeeShell } from "@/components/employee-shell";
 import type { AgentMessageView } from "@/domain/chat";
 import { can } from "@/domain/access";
 import { getSession } from "@/server/auth/session";
 import { getConversations } from "@/server/conversations";
-
-function OnlineStatus() {
-  return (
-    <div className={styles.status}>
-      <span className={styles.statusDot} />
-      Assistente online
-    </div>
-  );
-}
 
 async function ChatScreen({ searchParams }: { searchParams: Promise<{ conversation?: string }> }) {
   const user = await getSession();
@@ -41,9 +31,10 @@ async function ChatScreen({ searchParams }: { searchParams: Promise<{ conversati
   };
 
   return (
-    <EmployeeShell user={user} active="chat" title="Atendimento" topBarRight={<OnlineStatus />}>
-      <ChatView
-        initialMessages={[greeting, ...(conversation?.messages ?? [])]} initialUsed={conversation?.used ?? 0}
+    <EmployeeShell user={user} active="chat" title="Atendimento">
+      <ChatScreenClient
+        initialMessages={[greeting, ...(conversation?.messages ?? [])]}
+        initialUsed={conversation?.used ?? 0}
         initialWithSupport={conversation?.mode === "analyst"}
         conversationId={conversation?.id}
       />
