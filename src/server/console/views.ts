@@ -116,13 +116,17 @@ export function sortSummaries(summaries: ConversationSummary[], analystId: numbe
     return group === "queue" ? 0 : group === "mine" ? 1 : group === "closed" ? 3 : 2;
   };
   return [...summaries].sort((a, b) => {
-    const rankA = rank(a);
-    const rankB = rank(b);
-    if (rankA !== rankB) return rankA - rankB;
-    // Within the same group, prioritize unread messages, then most recently updated.
+    // 1. Prioritize unread messages above everything else
     const unreadA = a.unread > 0 ? 0 : 1;
     const unreadB = b.unread > 0 ? 0 : 1;
     if (unreadA !== unreadB) return unreadA - unreadB;
+
+    // 2. Then prioritize by group rank
+    const rankA = rank(a);
+    const rankB = rank(b);
+    if (rankA !== rankB) return rankA - rankB;
+
+    // 3. Finally, most recently updated
     return b.updatedAt.localeCompare(a.updatedAt);
   });
 }
