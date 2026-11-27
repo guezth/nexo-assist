@@ -31,7 +31,13 @@ export function useChat({
   const [inspectedId, setInspectedId] = useState<string | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const counter = useRef(0);
-  const [initialIds] = useState(() => new Set(initialMessages.map((m) => m.id)));\n\n  useEffect(() => {\n    setMessages(initialMessages);\n    setUsed(initialUsed);\n    setWithSupport(initialWithSupport);\n  }, [initialMessages, initialUsed, initialWithSupport]);
+  const [initialIds] = useState(() => new Set(initialMessages.map((m) => m.id)));
+
+  useEffect(() => {
+    setMessages(initialMessages);
+    setUsed(initialUsed);
+    setWithSupport(initialWithSupport);
+  }, [initialMessages, initialUsed, initialWithSupport]);
 
   const limitReached = used >= MAX_SESSION_MESSAGES;
   const busy = pending || limitReached;

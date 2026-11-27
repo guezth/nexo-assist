@@ -115,7 +115,16 @@ export function sortSummaries(summaries: ConversationSummary[], analystId: numbe
     const group = groupOf(s, analystId);
     return group === "queue" ? 0 : group === "mine" ? 1 : group === "closed" ? 3 : 2;
   };
-  return [...summaries].sort((a, b) => rank(a) - rank(b) || b.updatedAt.localeCompare(a.updatedAt));
+  return [...summaries].sort((a, b) => {
+    const rankA = rank(a);
+    const rankB = rank(b);
+    if (rankA !== rankB) return rankA - rankB;
+    // Within the same group, prioritize unread messages, then most recently updated.
+    const unreadA = a.unread > 0 ? 0 : 1;
+    const unreadB = b.unread > 0 ? 0 : 1;
+    if (unreadA !== unreadB) return unreadA - unreadB;
+    return b.updatedAt.localeCompare(a.updatedAt);
+  });
 }
 
 export function toMessages(messages: ChatMessageView[]): ConsoleMessageView[] {
