@@ -89,14 +89,7 @@ export function ConsoleView({
       try {
         const updated = JSON.parse(event.data) as ConversationRowView[];
         if (Array.isArray(updated)) {
-          // Sort based on urgency (unread first) and then by update time
-          const sorted = [...updated].sort((a, b) => {
-            const unreadA = a.unread > 0 ? 0 : 1;
-            const unreadB = b.unread > 0 ? 0 : 1;
-            if (unreadA !== unreadB) return unreadA - unreadB;
-            return b.time.localeCompare(a.time); // Assuming time is ISO or comparable
-          });
-          setLiveRows(sorted);
+          setLiveRows(updated);
         }
       } catch {
         // Keep the last list; try again on the next event.
