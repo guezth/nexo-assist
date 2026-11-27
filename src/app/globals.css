@@ -6,6 +6,7 @@
   --muted: #636363;
   --border: #0b0b0b14;
   --primary: #0285f7;
+  --accent: var(--primary);
   --primary-soft: #0285f712;
   --primary-text: #0069c7;
   --success: #00bd6c;
